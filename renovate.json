@@ -13,7 +13,7 @@
     "custom.regex"
   ],
   "schedule": [
-    "before 06:00 on monday"
+    "before 06:00"
   ],
   "prConcurrentLimit": 4,
   "prHourlyLimit": 2,
