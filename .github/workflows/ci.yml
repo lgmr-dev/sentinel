@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
         with:
-          node-version: "26.13.0"
+          node-version: "26.13.1"
       - name: Installer and import tests
         run: node --test --test-global-setup=tests/tmpdir-setup.mjs "tests/*.test.mjs"
 
@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0  # gitleaks reads the full history
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
         with:
-          node-version: "26.13.0"
+          node-version: "26.13.1"
       - name: Shell script, home paths and STE prose
         run: make lint
       - name: Secrets
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
         with:
-          node-version: "26.13.0"
+          node-version: "26.13.1"
       - name: Pinned upstream sources give the same files
         run: node tools/upstream.mjs --verify
         env:
