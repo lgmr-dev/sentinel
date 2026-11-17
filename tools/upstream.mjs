@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const manifestPath = 'upstream/imports.json';
 const lockPath = 'upstream/lock.json';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+const blobId = bytes => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 const json = value => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const fail = message => { throw new Error(message); };
 const safe = name => typeof name === 'string' && /^[A-Za-z0-9_.\/-]+$/.test(name)
@@ -97,6 +98,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
     async function download(url, limit = 8 * 1024 * 1024) {
       const headers = { 'User-Agent': 'sentinel-upstream' };
       if (url.startsWith('https://api.github.com/') && process.env.GH_TOKEN) headers.Authorization = `Bearer ${process.env.GH_TOKEN}`;
+      if (url.includes('/git/blobs/')) headers.Accept = 'application/vnd.github.raw+json';
       const response = await fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(60000), headers });
       if (!response.ok) fail(`Upstream request failed (${response.status}): ${url}`);
       const chunks = []; let size = 0;
@@ -123,7 +125,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
         const entries = tree.tree.filter(item => from.endsWith('/') ? item.path.startsWith(from) && item.type !== 'tree' : item.path === from);
         if (!entries.length) fail(`Missing upstream path: ${from}`);
         for (const entry of entries) {
-          if (!safe(entry.path) || entry.type !== 'blob' || !['100644', '100755'].includes(entry.mode)) fail(`Unsupported upstream entry: ${entry.path}`);
+          if (!safe(entry.path) || entry.type !== 'blob' || !['100644', '100755'].includes(entry.mode) || !/^[0-9a-f]{40}$/.test(entry.sha)) fail(`Unsupported upstream entry: ${entry.path}`);
           for (const target of [to].flat()) {
             const dest = from.endsWith('/') ? target + entry.path.slice(from.length) : target;
             if (!safe(dest) || selected.has(dest) || output.has(dest)) fail(`Duplicate or unsafe destination: ${dest}`);
@@ -135,7 +137,10 @@ export async function run({ root, mode, fetchImpl = fetch }) {
       const downloads = new Map(), originals = new Map();
       for (const [dest, entry] of selected) {
         const from = entry.path;
-        if (!downloads.has(from)) downloads.set(from, await download(`https://raw.githubusercontent.com/${source.repository}/${source.revision}/${from}`));
+        if (!downloads.has(from)) {
+          const ours = await read(root, dest);
+          downloads.set(from, ours && blobId(ours) === entry.sha ? ours : await download(`https://api.github.com/repos/${source.repository}/git/blobs/${entry.sha}`));
+        }
         const original = downloads.get(from);
         if (old?.sources[source.id] === source.revision && old.files[dest]?.path === from
           && (old.files[dest].sha256 !== sha(original) || old.files[dest].executable !== (entry.mode === '100755'))) {
