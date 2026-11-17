@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { run } from '../tools/upstream.mjs';
@@ -10,6 +11,7 @@ import { propose } from '../tools/propose-upstream.mjs';
 
 const pin = '1'.repeat(40), next = '2'.repeat(40);
 const encode = value => `${JSON.stringify(value, null, 2)}\n`;
+const blobId = text => createHash('sha1').update(`blob ${Buffer.byteLength(text)}\0${text}`).digest('hex');
 async function fixture(fn) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sentinel-import-'));
   try {
@@ -26,10 +28,14 @@ async function fixture(fn) {
     const fetchImpl = async url => {
       requests.push(url);
       if (url.endsWith('/commits/main')) return Response.json({ sha: next });
+      if (url.includes('/git/blobs/')) {
+        const text = Object.values(versions).flatMap(Object.values).find(value => blobId(value) === url.split('/').pop());
+        return new Response(text ?? '', { status: text === undefined ? 404 : 200 });
+      }
       const revision = url.match(/[12]{40}/)?.[0];
       if (!revision) throw new Error(`Unexpected request ${url}`);
       if (url.includes('/git/trees/')) return Response.json({ truncated: false,
-        tree: Object.keys(versions[revision]).map(file => ({ path: file, type: 'blob', mode: '100644' })) });
+        tree: Object.entries(versions[revision]).map(([file, text]) => ({ path: file, type: 'blob', mode: '100644', sha: blobId(text) })) });
       const name = url.split(`${revision}/`)[1];
       return new Response(versions[revision][name] ?? '', { status: name in versions[revision] ? 200 : 404 });
     };
@@ -184,6 +190,23 @@ test('online verification rejects changed bytes even if local hashes still match
   const before = await snapshot(f.root);
   await assert.rejects(f.invoke('verify'), /differ from the lock/);
   assert.deepEqual(await snapshot(f.root), before);
+}));
+
+test('online verification asks only the API, with GH_TOKEN, and downloads no file that it already has', async () => fixture(async f => {
+  await f.invoke('sync');
+  const sent = new Set();
+  const previous = process.env.GH_TOKEN;
+  process.env.GH_TOKEN = 'token-for-test';
+  try {
+    await f.invoke('verify', async (url, options) => {
+      const { host, pathname } = new URL(url);
+      sent.add(`${host} ${options.headers.Authorization} ${pathname.match(/\/git\/(\w+)\//)?.[1]}`);
+      return f.fetchImpl(url);
+    });
+  } finally {
+    if (previous === undefined) delete process.env.GH_TOKEN; else process.env.GH_TOKEN = previous;
+  }
+  assert.deepEqual([...sent], ['api.github.com Bearer token-for-test trees']);
 }));
 
 test('unrelated upstream commits do not create pin-only update noise', async () => fixture(async f => {
