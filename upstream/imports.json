@@ -5,7 +5,7 @@
       "id": "tstack",
       "repository": "t3dotgg/tstack",
       "ref": "main",
-      "revision": "1085050f3baed1ac724caa4a8166145fb2ac88af",
+      "revision": "11e37a74d0a6868c121cd0910ab2b3bd9873b92a",
       "paths": {
         "skills/babysit-pr/": "skills/babysit-pr/",
         "skills/council/": "skills/council/",
@@ -44,7 +44,7 @@
       "id": "impeccable",
       "repository": "pbakaus/impeccable",
       "ref": "main",
-      "revision": "b4bff1626c344067788c2679f048a20057c7cc5a",
+      "revision": "b49177d32788f2dc585c42831d845dacf1ebed2c",
       "paths": {
         ".agents/skills/impeccable/": "skills/impeccable/",
         "LICENSE": "skills/impeccable/LICENSE",
@@ -74,7 +74,7 @@
       "id": "pstack",
       "repository": "cursor/plugins",
       "ref": "main",
-      "revision": "4dd1d05818d19792e7cd6e818f1667f95f7e1dbe",
+      "revision": "d42aff08aa58965d2735c4ead61a9af82b89d0d0",
       "paths": {
         "pstack/LICENSE": [
           "skills/technical-writing/LICENSE",
@@ -88,6 +88,8 @@
         "pstack/skills/statechart/scripts/frontends/": "skills/statechart/scripts/frontends/",
         "pstack/skills/statechart/scripts/passes/": "skills/statechart/scripts/passes/",
         "pstack/skills/statechart/scripts/ir.ts": "skills/statechart/scripts/ir.ts",
+        "pstack/skills/statechart/scripts/janitor.ts": "skills/statechart/scripts/janitor.ts",
+        "pstack/skills/statechart/scripts/kill.ts": "skills/statechart/scripts/kill.ts",
         "pstack/skills/statechart/scripts/package.json": "skills/statechart/scripts/package.json",
         "pstack/skills/statechart/scripts/pipeline.ts": "skills/statechart/scripts/pipeline.ts",
         "pstack/skills/statechart/scripts/run.ts": "skills/statechart/scripts/run.ts",
