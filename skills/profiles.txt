@@ -14,7 +14,6 @@ core technical-writing
 core tldr
 core untangle
 core verify-pr
-core why
 formal statechart
 ui beast-ui
 ui doc-view
