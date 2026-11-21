@@ -92,7 +92,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
     async function download(url, limit = 8 * 1024 * 1024) {
       const headers = { 'User-Agent': 'sentinel-upstream' };
       if (url.startsWith('https://api.github.com/') && process.env.GH_TOKEN) headers.Authorization = `Bearer ${process.env.GH_TOKEN}`;
-      if (/\/(git\/blobs|contents)\//.test(url)) headers.Accept = 'application/vnd.github.raw+json';
+      if (/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/(git\/blobs|contents)\//.test(url)) headers.Accept = 'application/vnd.github.raw+json';
       const response = await fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(60000), headers });
       if (!response.ok) fail(`Upstream request failed (${response.status}): ${url}`);
       const chunks = []; let size = 0;
@@ -217,10 +217,11 @@ export async function run({ root, mode, fetchImpl = fetch }) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.length !== 3) fail('Usage: node tools/upstream.mjs --check|--verify|--sync|--update');
-    if (process.argv[2] !== '--check' && !process.env.GH_TOKEN) {
+    const mode = process.argv[2].replace(/^--/, '');
+    if (mode !== 'check' && !process.env.GH_TOKEN) {
       const gh = spawnSync('gh', ['auth', 'token', '--hostname', 'github.com'], { encoding: 'utf8' });
       if (gh.status === 0 && gh.stdout.trim()) process.env.GH_TOKEN = gh.stdout.trim();
     }
-    console.log(await run({ root: fileURLToPath(new URL('../', import.meta.url)), mode: process.argv[2].replace(/^--/, '') }));
+    console.log(await run({ root: fileURLToPath(new URL('../', import.meta.url)), mode }));
   } catch (error) { console.error(`upstream: ${error.message}`); process.exitCode = 1; }
 }
