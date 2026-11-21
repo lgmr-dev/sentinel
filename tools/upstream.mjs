@@ -27,8 +27,6 @@ async function read(root, name) {
   return fs.readFile(current);
 }
 
-// A mapping copies one upstream file to one or more destinations, or one
-// upstream directory to one destination directory. Destinations are under skills/.
 async function inputs(root) {
   const bytes = await read(root, manifestPath);
   const manifest = JSON.parse(bytes);
@@ -51,8 +49,6 @@ async function inputs(root) {
   return { manifest, hashes: { [manifestPath]: sha(bytes) } };
 }
 
-// A locked file has the sha256 of the upstream bytes. A file that Sentinel
-// edited also has `local`, the sha256 of the edited bytes.
 async function checkedFiles(root, lock) {
   if (lock.version !== 1 || !lock.files || !Object.keys(lock.files).length) fail('Invalid import lock');
   for (const [file, entry] of Object.entries(lock.files)) {
@@ -65,8 +61,6 @@ async function checkedFiles(root, lock) {
   }
 }
 
-// Merge the upstream change from base to theirs into ours. A conflict stays in
-// the result as conflict markers.
 async function merge(ours, base, theirs) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sentinel-merge-'));
   try {
@@ -83,7 +77,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
   root = await fs.realpath(root);
   const writing = mode === 'sync' || mode === 'update';
   const guard = path.join(root, '.upstream-sync.local');
-  if (writing) await fs.mkdir(guard); // Never steal another import's lock.
+  if (writing) await fs.mkdir(guard);
   try {
     const config = await inputs(root);
     const oldBytes = await read(root, lockPath);
@@ -148,7 +142,6 @@ export async function run({ root, mode, fetchImpl = fetch }) {
         }
         originals.set(dest, original);
       }
-      // Keep the old pin when no imported file changed, so unrelated upstream commits make no update.
       const previous = Object.entries(old?.files || {}).filter(([, entry]) => entry.source === source.id);
       if (mode === 'update' && previous.length === selected.size && previous.every(([dest, entry]) =>
         originals.has(dest) && sha(originals.get(dest)) === entry.sha256
@@ -157,7 +150,6 @@ export async function run({ root, mode, fetchImpl = fetch }) {
         const theirs = originals.get(dest), prior = old?.files[dest];
         const ours = prior && await read(root, dest);
         let bytes = theirs;
-        // Keep a Sentinel edit, and merge an upstream change into it.
         if (ours && sha(ours) !== prior.sha256) {
           if (sha(theirs) === prior.sha256) bytes = ours;
           else {
@@ -183,7 +175,6 @@ export async function run({ root, mode, fetchImpl = fetch }) {
       if (!oldBytes.equals(output.get(lockPath))) fail('Upstream bytes differ from the lock');
       return 'Pinned upstream sources reproduce the bundle';
     }
-    // Prepare everything before touching the bundle. Restore all files if any write fails.
     const originals = new Map(), modes = new Map();
     for (const file of new Set([...Object.keys(old?.files || {}), ...output.keys()])) {
       const before = await read(root, file);

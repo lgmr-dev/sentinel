@@ -130,14 +130,14 @@ test('edited imports and stale inputs fail offline checks without writing', asyn
   await assert.rejects(f.invoke('check'), /inputs changed/);
 }));
 
-test('sync keeps a Sentinel edit, and update merges the upstream change into it', async () => fixture(async f => {
+test('sync keeps a Sentinel edit, and update merges the upstream change into it with a base from the API', async () => fixture(async f => {
   await f.invoke('sync');
   const skill = path.join(f.root, 'skills/sample/SKILL.md');
   await f.write('skills/sample/SKILL.md', 'Sentinel intro\nWork steps.\nKeep original rules.\n');
   await f.invoke('sync');
   await f.invoke('check'); await f.invoke('verify');
   assert.equal(await fs.readFile(skill, 'utf8'), 'Sentinel intro\nWork steps.\nKeep original rules.\n');
-  await f.invoke('update');
+  assert.deepEqual(await requestsWithToken(f, 'update'), ['blobs', 'commits', 'contents', 'trees'].map(kind => `api.github.com Bearer token-for-test ${kind}`));
   assert.equal(await fs.readFile(skill, 'utf8'), 'Sentinel intro\nWork steps.\nKeep new rules.\n');
   await f.invoke('check'); await f.invoke('verify');
 }));
@@ -216,14 +216,6 @@ test('online verification rejects changed bytes even if local hashes still match
 test('online verification asks only the API, with GH_TOKEN, and downloads no file that it already has', async () => fixture(async f => {
   await f.invoke('sync');
   assert.deepEqual(await requestsWithToken(f, 'verify'), ['api.github.com Bearer token-for-test trees']);
-}));
-
-test('an update gets the merge base of a Sentinel edit from the API, with GH_TOKEN', async () => fixture(async f => {
-  await f.invoke('sync');
-  await f.write('skills/sample/SKILL.md', 'Sentinel intro\nWork steps.\nKeep original rules.\n');
-  await f.invoke('sync');
-  assert.deepEqual(await requestsWithToken(f, 'update'), ['blobs', 'commits', 'contents', 'trees'].map(kind => `api.github.com Bearer token-for-test ${kind}`));
-  assert.equal(await fs.readFile(path.join(f.root, 'skills/sample/SKILL.md'), 'utf8'), 'Sentinel intro\nWork steps.\nKeep new rules.\n');
 }));
 
 test('the CLI uses the token of gh when GH_TOKEN is not set', { skip: process.platform === 'win32' }, async () => fixture(async f => {
