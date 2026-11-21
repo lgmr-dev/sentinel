@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Import data only. Never run upstream scripts or install into a user profile.
 import fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -27,8 +28,6 @@ async function read(root, name) {
   return fs.readFile(current);
 }
 
-// A mapping copies one upstream file to one or more destinations, or one
-// upstream directory to one destination directory. Destinations are under skills/.
 async function inputs(root) {
   const bytes = await read(root, manifestPath);
   const manifest = JSON.parse(bytes);
@@ -51,8 +50,6 @@ async function inputs(root) {
   return { manifest, hashes: { [manifestPath]: sha(bytes) } };
 }
 
-// A locked file has the sha256 of the upstream bytes. A file that Sentinel
-// edited also has `local`, the sha256 of the edited bytes.
 async function checkedFiles(root, lock) {
   if (lock.version !== 1 || !lock.files || !Object.keys(lock.files).length) fail('Invalid import lock');
   for (const [file, entry] of Object.entries(lock.files)) {
@@ -65,8 +62,6 @@ async function checkedFiles(root, lock) {
   }
 }
 
-// Merge the upstream change from base to theirs into ours. A conflict stays in
-// the result as conflict markers.
 async function merge(ours, base, theirs) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sentinel-merge-'));
   try {
@@ -83,7 +78,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
   root = await fs.realpath(root);
   const writing = mode === 'sync' || mode === 'update';
   const guard = path.join(root, '.upstream-sync.local');
-  if (writing) await fs.mkdir(guard); // Never steal another import's lock.
+  if (writing) await fs.mkdir(guard);
   try {
     const config = await inputs(root);
     const oldBytes = await read(root, lockPath);
@@ -98,7 +93,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
     async function download(url, limit = 8 * 1024 * 1024) {
       const headers = { 'User-Agent': 'sentinel-upstream' };
       if (url.startsWith('https://api.github.com/') && process.env.GH_TOKEN) headers.Authorization = `Bearer ${process.env.GH_TOKEN}`;
-      if (url.includes('/git/blobs/')) headers.Accept = 'application/vnd.github.raw+json';
+      if (/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/(git\/blobs|contents)\//.test(url)) headers.Accept = 'application/vnd.github.raw+json';
       const response = await fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(60000), headers });
       if (!response.ok) fail(`Upstream request failed (${response.status}): ${url}`);
       const chunks = []; let size = 0;
@@ -148,7 +143,6 @@ export async function run({ root, mode, fetchImpl = fetch }) {
         }
         originals.set(dest, original);
       }
-      // Keep the old pin when no imported file changed, so unrelated upstream commits make no update.
       const previous = Object.entries(old?.files || {}).filter(([, entry]) => entry.source === source.id);
       if (mode === 'update' && previous.length === selected.size && previous.every(([dest, entry]) =>
         originals.has(dest) && sha(originals.get(dest)) === entry.sha256
@@ -157,11 +151,10 @@ export async function run({ root, mode, fetchImpl = fetch }) {
         const theirs = originals.get(dest), prior = old?.files[dest];
         const ours = prior && await read(root, dest);
         let bytes = theirs;
-        // Keep a Sentinel edit, and merge an upstream change into it.
         if (ours && sha(ours) !== prior.sha256) {
           if (sha(theirs) === prior.sha256) bytes = ours;
           else {
-            const base = await download(`https://raw.githubusercontent.com/${source.repository}/${old.sources[source.id]}/${prior.path}`);
+            const base = await download(`https://api.github.com/repos/${source.repository}/contents/${prior.path}?ref=${old.sources[source.id]}`);
             if (sha(base) !== prior.sha256) fail(`Pinned upstream bytes differ from the lock: ${dest}`);
             const merged = await merge(ours, base, theirs);
             bytes = merged.bytes;
@@ -183,7 +176,6 @@ export async function run({ root, mode, fetchImpl = fetch }) {
       if (!oldBytes.equals(output.get(lockPath))) fail('Upstream bytes differ from the lock');
       return 'Pinned upstream sources reproduce the bundle';
     }
-    // Prepare everything before touching the bundle. Restore all files if any write fails.
     const originals = new Map(), modes = new Map();
     for (const file of new Set([...Object.keys(old?.files || {}), ...output.keys()])) {
       const before = await read(root, file);
@@ -223,9 +215,18 @@ export async function run({ root, mode, fetchImpl = fetch }) {
   } finally { if (writing) await fs.rmdir(guard); }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const isMain = import.meta.main ?? (() => {
+  const self = fileURLToPath(import.meta.url);
+  try { return path.resolve(process.argv[1]) === self || realpathSync(process.argv[1]) === self; } catch { return false; }
+})();
+if (isMain) {
   try {
     if (process.argv.length !== 3) fail('Usage: node tools/upstream.mjs --check|--verify|--sync|--update');
-    console.log(await run({ root: fileURLToPath(new URL('../', import.meta.url)), mode: process.argv[2].replace(/^--/, '') }));
+    const mode = process.argv[2].replace(/^--/, '');
+    if (mode !== 'check' && !process.env.GH_TOKEN) {
+      const gh = spawnSync('gh', ['auth', 'token', '--hostname', 'github.com'], { encoding: 'utf8' });
+      if (gh.status === 0 && gh.stdout.trim()) process.env.GH_TOKEN = gh.stdout.trim();
+    }
+    console.log(await run({ root: fileURLToPath(new URL('../', import.meta.url)), mode }));
   } catch (error) { console.error(`upstream: ${error.message}`); process.exitCode = 1; }
 }
