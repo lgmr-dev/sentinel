@@ -275,3 +275,18 @@ test('the bot CLI rejects non-main refs and unapproved events before any externa
     assert.match(result.stderr, /runs only on main, by schedule or manual dispatch/);
   }
 });
+
+test('each local module that an imported script loads is in the bundle', async () => {
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  const lock = JSON.parse(await fs.readFile(path.join(root, 'upstream/lock.json'), 'utf8'));
+  const missing = [];
+  for (const file of Object.keys(lock.files).filter(name => /\.m?[jt]s$/.test(name))) {
+    const text = await fs.readFile(path.join(root, file), 'utf8');
+    const loads = /(?:\bfrom\s*|\bimport\s*\(\s*)["'](\.{1,2}\/[^"']+)["']|import\.meta\.dirname,\s*["']([^"']+\.m?[jt]s)["']/g;
+    for (const [, relative, sibling] of text.matchAll(loads)) {
+      const target = path.join(path.dirname(file), relative ?? sibling);
+      if (!(await fs.stat(path.join(root, target)).catch(() => null))) missing.push(`${file} -> ${target}`);
+    }
+  }
+  assert.deepEqual(missing, []);
+});
