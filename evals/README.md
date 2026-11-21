@@ -96,7 +96,7 @@ earlier runs of the same day, with 1 to 3 runs for each arm.
 | `sol-loop` | Trusted | 5/5 | 0/15 · 3/15 |
 | `technical-writing` | Trusted | 4/5 | 0/15 · 0/15 |
 | `statechart` | Trusted | 3/5 | 0/15 · 6/15 |
-| `why` | Trusted | 2/5 | 0/9 · 0/9 |
+| `why` (removed) | Trusted | 2/5 | 0/9 · 0/9 |
 | `tldr` | Use with care | 2/5 | 0/15 · 0/15 |
 | `untangle` | See the note | 0/5 | see the note |
 | `full-stop` | Trusted | 5/5 | 0/15 · 0/15 |
@@ -134,6 +134,9 @@ earlier runs of the same day, with 1 to 3 runs for each arm.
   repository and the line that names the model and the harness.
 - **how:** removed with its `explain` profile and its case. Strong models
   explained the code as well without it.
+- **why:** removed with its case. It had no gain on 3 of 5 models, and no
+  critical run with or without it. Upstream cut it to one paragraph that no
+  eval measured.
 - **Cleanup rule:** one Haiku run claimed an edit to the PR text that the log
   does not show.
 - **Review rule:** one Opus run said that it left no temporary files, and it

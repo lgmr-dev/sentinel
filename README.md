@@ -146,13 +146,12 @@ agent can also load each skill when its description fits the task.
 | `cleanup` | "clean up the branches" | The agent removes merged worktrees and branches and reports the others. |
 | `verify-pr` | "verify this PR" | A tester from another model family runs the app, compares each fault with the base, and reports each regression with steps to reproduce. `full-stop` runs it before the handoff. |
 | `no-comments` | "remove the comments" | The agent removes comments that code can replace, and keeps the others with a reason. |
-| `why` | "why is X like this" | The agent searches git, pull requests and your MCP servers, and gives the reason with a confidence level. |
 | `tldr` | "tldr" | A short version that keeps each fact that you need to decide or act. |
 | `technical-writing` | "simplify this", "STE" | Docs, PR text and rewrites in simple technical English, without AI patterns. |
 
 At xhigh, `council`, `cleanup`, `no-comments`, `sol-loop`, `technical-writing`
 and the rules for comments and cleanup changed the result on 4 or 5 models.
-`why` and `statechart` changed it on 2 or 3 models.
+`statechart` changed it on 2 or 3 models.
 See [evals/README.md](evals/README.md).
 
 The CI job version of `patrol` changed the result on 5 models, and
@@ -161,7 +160,7 @@ of the boundaries, `featuremap` changed it on 2 or 3 models. As a one-off map,
 it changed it on 1 model. Its script ran on real projects.
 
 Sources: `untangle`, `cleanup`, `no-comments`, `tldr`, `verify-pr`, `patrol`
-and `featuremap` are from Sentinel. `why`, `technical-writing` and `statechart` are
+and `featuremap` are from Sentinel. `technical-writing` and `statechart` are
 from [pstack](https://github.com/cursor/plugins/tree/main/pstack). The other
 skills are from [tstack](https://github.com/t3dotgg/tstack). Sentinel keeps
 the T3 Code routes of tstack and adds a route for each other CLI.

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "inputs": {
-    "upstream/imports.json": "8b71a610494159a1d39d83269808c5a9306fbc5f8c3b14fe4b5e008d2262c497"
+    "upstream/imports.json": "a5bfe5705ddb9134c20de0cf47731d29a6aaccafbb5edb39c2d33bfbbd2ed1a5"
   },
   "sources": {
     "tstack": "1085050f3baed1ac724caa4a8166145fb2ac88af",
@@ -555,12 +555,6 @@
       "sha256": "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3",
       "executable": false
     },
-    "skills/why/LICENSE": {
-      "source": "pstack",
-      "path": "pstack/LICENSE",
-      "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
-      "executable": false
-    },
     "skills/technical-writing/LICENSE": {
       "source": "pstack",
       "path": "pstack/LICENSE",
@@ -571,89 +565,6 @@
       "source": "pstack",
       "path": "pstack/LICENSE",
       "sha256": "bc957ca6bee02792566a1a028d105e02e247c6e77cf057061674273da77b200e",
-      "executable": false
-    },
-    "skills/why/SKILL.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/SKILL.md",
-      "sha256": "144d42e7712723d763e607bc0a969e5f1cdf83ec7228519d87677cc534571bed",
-      "local": "352bde51407f853a3979959b8f804124bbe94e3282fd43a1d7c1a6b9b1a36637",
-      "executable": false
-    },
-    "skills/why/references/epistemics.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/epistemics.md",
-      "sha256": "d54a2361b2d5973bc3fe2edf62f446d87935974d4b40d47f23b9529f956ca758",
-      "executable": false
-    },
-    "skills/why/references/investigator-prompt.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/investigator-prompt.md",
-      "sha256": "c44afba186f899094f3694e6c9d6de5d14ff7c4ce28b787a9f50fc789c9a7fc3",
-      "executable": false
-    },
-    "skills/why/references/source-playbook.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/source-playbook.md",
-      "sha256": "9ae9dcb9d09111c9facc68510331c5aba4aed9b1b057314ff1fc0e166ad3993a",
-      "local": "e3ba8340dbd1951ccd637c94bde9631ef5fc3f0bbd8b61160c9f1e549928c126",
-      "executable": false
-    },
-    "skills/why/references/sources/code-archaeology.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/code-archaeology.md",
-      "sha256": "a4a3970e9db448054aed676f3f7feeee667b4b69f0bd57c8fd72b751be687cc7",
-      "local": "dabf1ecfe65f6baeaacd93fbff86d021c7d888083d7660738ba0c1ca37774269",
-      "executable": false
-    },
-    "skills/why/references/sources/databricks.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/databricks.md",
-      "sha256": "236ede7aab6454662a992db088a5393537a5233a4c26719c93188f9e174488f6",
-      "executable": false
-    },
-    "skills/why/references/sources/datadog.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/datadog.md",
-      "sha256": "b139faac5dc11b8f26c8255dce6033c1a6ac143b038d3dd103f2034c5dbec9cd",
-      "executable": false
-    },
-    "skills/why/references/sources/incident-postmortem.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/incident-postmortem.md",
-      "sha256": "bf2661f1a81c37700884a45b77d6289be0c802b065febced31990e6564510839",
-      "executable": false
-    },
-    "skills/why/references/sources/linear.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/linear.md",
-      "sha256": "01304e7f1badfcfb78babbb0edcadeb3cc8dd3f713793420cdff24ba190f907c",
-      "local": "dbfa5ab9fc4d7d9e23b1392db953a8ede9b665815dd402b02b07996527c8a300",
-      "executable": false
-    },
-    "skills/why/references/sources/notion.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/notion.md",
-      "sha256": "3bcfa695c49dfad4ac036d5d7181c12585f55ac04f1936198d16ab75a2788997",
-      "executable": false
-    },
-    "skills/why/references/sources/sentry.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/sentry.md",
-      "sha256": "2d4f83048eac1df530b399e2aed75dd7c9c18577b7665420aaeb96d0ceb0b702",
-      "executable": false
-    },
-    "skills/why/references/sources/slack.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/sources/slack.md",
-      "sha256": "3bc6309f5c7b26ace3b919dbd7f7b048861dd2020f910fe24f656cc74b3b661c",
-      "executable": false
-    },
-    "skills/why/references/synthesizer-prompt.md": {
-      "source": "pstack",
-      "path": "pstack/skills/why/references/synthesizer-prompt.md",
-      "sha256": "11c62671aa7b7a6e3d36929ffe2b59bf95e6ca664eee4d93e6ee527dd3390ddb",
-      "local": "87d9393437190e2d006c3d91cdd9f2299ada604a2b486cc3036622000a7119f9",
       "executable": false
     },
     "skills/technical-writing/SKILL.md": {
