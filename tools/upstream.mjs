@@ -216,7 +216,8 @@ export async function run({ root, mode, fetchImpl = fetch }) {
 }
 
 const isMain = import.meta.main ?? (() => {
-  try { return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url); } catch { return false; }
+  const self = fileURLToPath(import.meta.url);
+  try { return path.resolve(process.argv[1]) === self || realpathSync(process.argv[1]) === self; } catch { return false; }
 })();
 if (isMain) {
   try {

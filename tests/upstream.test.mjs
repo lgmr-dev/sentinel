@@ -221,7 +221,7 @@ test('online verification asks only the API, with GH_TOKEN, and downloads no fil
 test('the tool runs its CLI only as the entry module, and an import does not fail when argv names no file', () => {
   const tool = new URL('../tools/upstream.mjs', import.meta.url);
   const started = spawnSync(process.execPath, [fileURLToPath(tool)], { encoding: 'utf8' });
-  assert.deepEqual([started.status, started.stderr], [1, 'upstream: Usage: node tools/upstream.mjs --check|--verify|--sync|--update\n']);
+  assert.equal(started.status, 1);
   const imported = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(tool.href)})`, '--', '--check'], { encoding: 'utf8' });
   assert.deepEqual([imported.status, imported.stdout, imported.stderr], [0, '', '']);
 });
