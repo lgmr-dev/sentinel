@@ -218,14 +218,15 @@ test('online verification asks only the API, with GH_TOKEN, and downloads no fil
   assert.deepEqual(await requestsWithToken(f, 'verify'), ['api.github.com Bearer token-for-test trees']);
 }));
 
-test('the CLI uses the token of gh when GH_TOKEN is not set', { skip: process.platform === 'win32' }, async () => fixture(async f => {
+test('the CLI runs through a symlink and uses the token of gh when GH_TOKEN is not set', { skip: process.platform === 'win32' }, async () => fixture(async f => {
   await fs.mkdir(path.join(f.root, 'tools'));
   await fs.copyFile(fileURLToPath(new URL('../tools/upstream.mjs', import.meta.url)), path.join(f.root, 'tools/upstream.mjs'));
+  await fs.symlink(path.join(f.root, 'tools/upstream.mjs'), path.join(f.root, 'upstream-link.mjs'));
   await fs.mkdir(path.join(f.root, 'bin'));
   await fs.writeFile(path.join(f.root, 'bin/gh'), '#!/bin/sh\n[ "$*" = "auth token --hostname github.com" ] && echo token-from-gh\n', { mode: 0o755 });
   await f.write('stub.mjs', "globalThis.fetch = async (url, options) => { process.stderr.write(`request ${options.headers.Authorization}\\n`); return new Response('', { status: 503 }); };\n");
   const { GH_TOKEN, ...env } = process.env;
-  const result = spawnSync(process.execPath, ['--import', pathToFileURL(path.join(f.root, 'stub.mjs')).href, path.join(f.root, 'tools/upstream.mjs'), '--sync'],
+  const result = spawnSync(process.execPath, ['--import', pathToFileURL(path.join(f.root, 'stub.mjs')).href, path.join(f.root, 'upstream-link.mjs'), '--sync'],
     { encoding: 'utf8', env: { ...env, PATH: `${path.join(f.root, 'bin')}${path.delimiter}${env.PATH}` } });
   assert.match(result.stderr, /^request Bearer token-from-gh$/m);
 }));

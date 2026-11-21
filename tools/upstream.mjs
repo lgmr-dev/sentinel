@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Import data only. Never run upstream scripts or install into a user profile.
 import fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -214,7 +215,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
   } finally { if (writing) await fs.rmdir(guard); }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.length !== 3) fail('Usage: node tools/upstream.mjs --check|--verify|--sync|--update');
     const mode = process.argv[2].replace(/^--/, '');
