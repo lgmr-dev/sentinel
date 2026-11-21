@@ -218,6 +218,11 @@ test('online verification asks only the API, with GH_TOKEN, and downloads no fil
   assert.deepEqual(await requestsWithToken(f, 'verify'), ['api.github.com Bearer token-for-test trees']);
 }));
 
+test('an import of the tool runs no CLI and does not fail, also when argv names no file', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(new URL('../tools/upstream.mjs', import.meta.url).href)})`, '--', '--check'], { encoding: 'utf8' });
+  assert.deepEqual([result.status, result.stdout, result.stderr], [0, '', '']);
+});
+
 test('the CLI runs through a symlink and uses the token of gh when GH_TOKEN is not set', { skip: process.platform === 'win32' }, async () => fixture(async f => {
   await fs.mkdir(path.join(f.root, 'tools'));
   await fs.copyFile(fileURLToPath(new URL('../tools/upstream.mjs', import.meta.url)), path.join(f.root, 'tools/upstream.mjs'));

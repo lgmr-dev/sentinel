@@ -215,7 +215,10 @@ export async function run({ root, mode, fetchImpl = fetch }) {
   } finally { if (writing) await fs.rmdir(guard); }
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const isMain = import.meta.main ?? (() => {
+  try { return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url); } catch { return false; }
+})();
+if (isMain) {
   try {
     if (process.argv.length !== 3) fail('Usage: node tools/upstream.mjs --check|--verify|--sync|--update');
     const mode = process.argv[2].replace(/^--/, '');
