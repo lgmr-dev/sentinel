@@ -98,7 +98,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
     async function download(url, limit = 8 * 1024 * 1024) {
       const headers = { 'User-Agent': 'sentinel-upstream' };
       if (url.startsWith('https://api.github.com/') && process.env.GH_TOKEN) headers.Authorization = `Bearer ${process.env.GH_TOKEN}`;
-      if (url.includes('/git/blobs/')) headers.Accept = 'application/vnd.github.raw+json';
+      if (/\/(git\/blobs|contents)\//.test(url)) headers.Accept = 'application/vnd.github.raw+json';
       const response = await fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(60000), headers });
       if (!response.ok) fail(`Upstream request failed (${response.status}): ${url}`);
       const chunks = []; let size = 0;
@@ -161,7 +161,7 @@ export async function run({ root, mode, fetchImpl = fetch }) {
         if (ours && sha(ours) !== prior.sha256) {
           if (sha(theirs) === prior.sha256) bytes = ours;
           else {
-            const base = await download(`https://raw.githubusercontent.com/${source.repository}/${old.sources[source.id]}/${prior.path}`);
+            const base = await download(`https://api.github.com/repos/${source.repository}/contents/${prior.path}?ref=${old.sources[source.id]}`);
             if (sha(base) !== prior.sha256) fail(`Pinned upstream bytes differ from the lock: ${dest}`);
             const merged = await merge(ours, base, theirs);
             bytes = merged.bytes;
@@ -226,6 +226,10 @@ export async function run({ root, mode, fetchImpl = fetch }) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.length !== 3) fail('Usage: node tools/upstream.mjs --check|--verify|--sync|--update');
+    if (process.argv[2] !== '--check' && !process.env.GH_TOKEN) {
+      const gh = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' });
+      if (gh.status === 0 && gh.stdout.trim()) process.env.GH_TOKEN = gh.stdout.trim();
+    }
     console.log(await run({ root: fileURLToPath(new URL('../', import.meta.url)), mode: process.argv[2].replace(/^--/, '') }));
   } catch (error) { console.error(`upstream: ${error.message}`); process.exitCode = 1; }
 }

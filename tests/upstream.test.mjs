@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { run } from '../tools/upstream.mjs';
 import { propose } from '../tools/propose-upstream.mjs';
@@ -36,12 +36,28 @@ async function fixture(fn) {
       if (!revision) throw new Error(`Unexpected request ${url}`);
       if (url.includes('/git/trees/')) return Response.json({ truncated: false,
         tree: Object.entries(versions[revision]).map(([file, text]) => ({ path: file, type: 'blob', mode: '100644', sha: blobId(text) })) });
-      const name = url.split(`${revision}/`)[1];
+      const name = new URL(url).pathname.split('/contents/')[1];
+      if (!name) throw new Error(`Unexpected request ${url}`);
       return new Response(versions[revision][name] ?? '', { status: name in versions[revision] ? 200 : 404 });
     };
     const invoke = (mode, transport = fetchImpl) => run({ root, mode, fetchImpl: transport });
     await fn({ root, manifest, versions, requests, write, invoke, fetchImpl });
   } finally { await fs.rm(root, { recursive: true, force: true }); }
+}
+async function requestsWithToken(f, mode) {
+  const sent = new Set();
+  const previous = process.env.GH_TOKEN;
+  process.env.GH_TOKEN = 'token-for-test';
+  try {
+    await f.invoke(mode, async (url, options) => {
+      const { host, pathname } = new URL(url);
+      sent.add(`${host} ${options.headers.Authorization} ${pathname.match(/\/git\/(\w+)\//)?.[1] ?? pathname.split('/')[4]}`);
+      return f.fetchImpl(url);
+    });
+  } finally {
+    if (previous === undefined) delete process.env.GH_TOKEN; else process.env.GH_TOKEN = previous;
+  }
+  return [...sent].sort();
 }
 async function snapshot(root) {
   const files = {};
@@ -194,19 +210,27 @@ test('online verification rejects changed bytes even if local hashes still match
 
 test('online verification asks only the API, with GH_TOKEN, and downloads no file that it already has', async () => fixture(async f => {
   await f.invoke('sync');
-  const sent = new Set();
-  const previous = process.env.GH_TOKEN;
-  process.env.GH_TOKEN = 'token-for-test';
-  try {
-    await f.invoke('verify', async (url, options) => {
-      const { host, pathname } = new URL(url);
-      sent.add(`${host} ${options.headers.Authorization} ${pathname.match(/\/git\/(\w+)\//)?.[1]}`);
-      return f.fetchImpl(url);
-    });
-  } finally {
-    if (previous === undefined) delete process.env.GH_TOKEN; else process.env.GH_TOKEN = previous;
-  }
-  assert.deepEqual([...sent], ['api.github.com Bearer token-for-test trees']);
+  assert.deepEqual(await requestsWithToken(f, 'verify'), ['api.github.com Bearer token-for-test trees']);
+}));
+
+test('an update gets the merge base of a Sentinel edit from the API, with GH_TOKEN', async () => fixture(async f => {
+  await f.invoke('sync');
+  await f.write('skills/sample/SKILL.md', 'Sentinel intro\nWork steps.\nKeep original rules.\n');
+  await f.invoke('sync');
+  assert.deepEqual(await requestsWithToken(f, 'update'), ['blobs', 'commits', 'contents', 'trees'].map(kind => `api.github.com Bearer token-for-test ${kind}`));
+  assert.equal(await fs.readFile(path.join(f.root, 'skills/sample/SKILL.md'), 'utf8'), 'Sentinel intro\nWork steps.\nKeep new rules.\n');
+}));
+
+test('the CLI uses the token of gh when GH_TOKEN is not set', { skip: process.platform === 'win32' }, async () => fixture(async f => {
+  await fs.mkdir(path.join(f.root, 'tools'));
+  await fs.copyFile(fileURLToPath(new URL('../tools/upstream.mjs', import.meta.url)), path.join(f.root, 'tools/upstream.mjs'));
+  await fs.mkdir(path.join(f.root, 'bin'));
+  await fs.writeFile(path.join(f.root, 'bin/gh'), '#!/bin/sh\n[ "$*" = "auth token" ] && echo token-from-gh\n', { mode: 0o755 });
+  await f.write('stub.mjs', "globalThis.fetch = async (url, options) => { process.stderr.write(`request ${options.headers.Authorization}\\n`); return new Response('', { status: 503 }); };\n");
+  const { GH_TOKEN, ...env } = process.env;
+  const result = spawnSync(process.execPath, ['--import', pathToFileURL(path.join(f.root, 'stub.mjs')).href, path.join(f.root, 'tools/upstream.mjs'), '--sync'],
+    { encoding: 'utf8', env: { ...env, PATH: `${path.join(f.root, 'bin')}${path.delimiter}${env.PATH}` } });
+  assert.match(result.stderr, /^request Bearer token-from-gh$/m);
 }));
 
 test('unrelated upstream commits do not create pin-only update noise', async () => fixture(async f => {

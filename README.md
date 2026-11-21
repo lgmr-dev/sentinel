@@ -256,6 +256,9 @@ repository and run the installer again.
 - `node tools/upstream.mjs --update` imports the newest upstream revisions.
   After a manual edit of `upstream/imports.json`, `--sync` imports again at the
   pins.
+- `--verify`, `--sync` and `--update` read the upstream files through the
+  GitHub API. They use `GH_TOKEN`. If it is not set, they use the token of
+  `gh auth login`. Without a token, GitHub allows 60 requests per hour.
 - To change an imported file, edit it and run `--sync`. The lock records the
   edit, and `--update` merges later upstream changes into it. A conflict stops
   the update with conflict markers in the file. Resolve them, then run
