@@ -227,7 +227,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     if (process.argv.length !== 3) fail('Usage: node tools/upstream.mjs --check|--verify|--sync|--update');
     if (process.argv[2] !== '--check' && !process.env.GH_TOKEN) {
-      const gh = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8' });
+      const gh = spawnSync('gh', ['auth', 'token', '--hostname', 'github.com'], { encoding: 'utf8' });
       if (gh.status === 0 && gh.stdout.trim()) process.env.GH_TOKEN = gh.stdout.trim();
     }
     console.log(await run({ root: fileURLToPath(new URL('../', import.meta.url)), mode: process.argv[2].replace(/^--/, '') }));

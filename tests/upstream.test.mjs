@@ -25,19 +25,24 @@ async function fixture(fn) {
       [next]: { 'bundle/SKILL.md': 'Upstream intro\nWork steps.\nKeep new rules.\n', 'bundle/LICENSE': 'New license\n', 'bundle/reference/new.md': 'New reference\n' },
     };
     const requests = [];
-    const fetchImpl = async url => {
+    const fetchImpl = async (url, options) => {
       requests.push(url);
       if (url.endsWith('/commits/main')) return Response.json({ sha: next });
+      const raw = options?.headers?.Accept === 'application/vnd.github.raw+json';
       if (url.includes('/git/blobs/')) {
+        if (!raw) return new Response('not raw', { status: 406 });
         const text = Object.values(versions).flatMap(Object.values).find(value => blobId(value) === url.split('/').pop());
         return new Response(text ?? '', { status: text === undefined ? 404 : 200 });
       }
-      const revision = url.match(/[12]{40}/)?.[0];
-      if (!revision) throw new Error(`Unexpected request ${url}`);
-      if (url.includes('/git/trees/')) return Response.json({ truncated: false,
-        tree: Object.entries(versions[revision]).map(([file, text]) => ({ path: file, type: 'blob', mode: '100644', sha: blobId(text) })) });
-      const name = new URL(url).pathname.split('/contents/')[1];
-      if (!name) throw new Error(`Unexpected request ${url}`);
+      if (url.includes('/git/trees/')) {
+        const revision = url.match(/[12]{40}/)?.[0];
+        return Response.json({ truncated: false,
+          tree: Object.entries(versions[revision]).map(([file, text]) => ({ path: file, type: 'blob', mode: '100644', sha: blobId(text) })) });
+      }
+      const { pathname, searchParams } = new URL(url);
+      const name = pathname.split('/contents/')[1], revision = searchParams.get('ref');
+      if (!name || !(revision in versions)) throw new Error(`Unexpected request ${url}`);
+      if (!raw) return new Response('not raw', { status: 406 });
       return new Response(versions[revision][name] ?? '', { status: name in versions[revision] ? 200 : 404 });
     };
     const invoke = (mode, transport = fetchImpl) => run({ root, mode, fetchImpl: transport });
@@ -52,7 +57,7 @@ async function requestsWithToken(f, mode) {
     await f.invoke(mode, async (url, options) => {
       const { host, pathname } = new URL(url);
       sent.add(`${host} ${options.headers.Authorization} ${pathname.match(/\/git\/(\w+)\//)?.[1] ?? pathname.split('/')[4]}`);
-      return f.fetchImpl(url);
+      return f.fetchImpl(url, options);
     });
   } finally {
     if (previous === undefined) delete process.env.GH_TOKEN; else process.env.GH_TOKEN = previous;
@@ -159,8 +164,8 @@ for (const [fault, expected] of Object.entries(faults)) {
   test(`${fault}: invalid updates leave the entire bundle unchanged`, async () => fixture(async f => {
     await f.invoke('sync');
     let transport = f.fetchImpl;
-    if (fault === 'symlink' || fault === 'truncated') transport = async url => {
-      const response = await f.fetchImpl(url);
+    if (fault === 'symlink' || fault === 'truncated') transport = async (url, options) => {
+      const response = await f.fetchImpl(url, options);
       if (!url.includes('/git/trees/')) return response;
       const body = await response.json();
       if (fault === 'symlink') body.tree[0].mode = '120000'; else body.truncated = true;
@@ -225,7 +230,7 @@ test('the CLI uses the token of gh when GH_TOKEN is not set', { skip: process.pl
   await fs.mkdir(path.join(f.root, 'tools'));
   await fs.copyFile(fileURLToPath(new URL('../tools/upstream.mjs', import.meta.url)), path.join(f.root, 'tools/upstream.mjs'));
   await fs.mkdir(path.join(f.root, 'bin'));
-  await fs.writeFile(path.join(f.root, 'bin/gh'), '#!/bin/sh\n[ "$*" = "auth token" ] && echo token-from-gh\n', { mode: 0o755 });
+  await fs.writeFile(path.join(f.root, 'bin/gh'), '#!/bin/sh\n[ "$*" = "auth token --hostname github.com" ] && echo token-from-gh\n', { mode: 0o755 });
   await f.write('stub.mjs', "globalThis.fetch = async (url, options) => { process.stderr.write(`request ${options.headers.Authorization}\\n`); return new Response('', { status: 503 }); };\n");
   const { GH_TOKEN, ...env } = process.env;
   const result = spawnSync(process.execPath, ['--import', pathToFileURL(path.join(f.root, 'stub.mjs')).href, path.join(f.root, 'tools/upstream.mjs'), '--sync'],
