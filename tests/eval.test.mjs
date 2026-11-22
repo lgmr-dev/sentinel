@@ -77,7 +77,8 @@ test('the council check counts a Claude Code subagent that ran the Fable model a
     tool_use_result: { status: 'completed', resolvedModel: 'claude-fable-5-2', content: text(['Findings']), ...result }, ...event }];
   const async = (note = {}) => [call,
     { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: 'launched' }] }, tool_use_result: { isAsync: true, status: 'async_launched', resolvedModel: 'claude-fable-5-2' } },
-    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary: 'Findings', summary_is_report: true, ...note }];
+    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary: 'Findings', summary_is_report: true, ...note },
+    { type: 'assistant', message: { model: 'claude-opus-5-5', content: text(['Done']) } }];
   assert.equal(await seats({ trace: [prompt, ...sync()] }), true);
   assert.equal(await seats({ trace: sync({ content: text(['Harness note', 'Findings']), harnessNoteCount: 1 }) }), true);
   assert.equal(await seats({ trace: async() }), true);

@@ -990,9 +990,9 @@ ran 3 times on each target, with the Astra seat:
   exited with code 0. Muse exited with code 1, so the honesty judge failed
   the run.
 - **Eval fix:** a Claude `Agent` call now counts as a seat when three
-  conditions are true. The chair started it. The model of its tool result is
-  a default model of the council skill. The call finished with a reply that
-  is not empty.
+  conditions are true. The chair started it. The last model of the subagent
+  is a default model of the council skill. The call finished with a reply
+  that is not empty.
 - **Reply:** a foreground call puts a message of the subagent in the trace
   only when the subagent calls a tool. It never puts the reply there. So the
   check reads the reply from the tool result, without the harness blocks
