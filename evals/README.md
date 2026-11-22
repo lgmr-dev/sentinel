@@ -12,7 +12,7 @@ how badly it can fail.
 | `make eval ARGS="--ab"` | A/B. Each case runs **with** and **without** its skill or rule, on the 5 default models, with both judges. It prints the trust table. Use it for a new or removed skill, a rewrite of a skill, or a new or removed rules section. |
 | `make eval ARGS="--ab --arms without"` | An A/B that runs only the named arm. The **without** arm does not change with the skill, so a climb can run it once and join its `runs.jsonl` with the runs of each new skill text. Put both arms in one folder for `tools/trust.mjs`, because it keeps only the last folder for each case and target. |
 | `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
-| `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. |
+| `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. A judge that is gone from `targets.json` gets the current judge of its host. The council checks read the seat models from the current council skill, so a council run from before a change of the seats counts 0 seats for each model that changed. |
 | `node tools/trust.mjs <results folder>...` | Prints the trust table of saved A/B runs. |
 
 In an A/B run, the arms are:
@@ -898,7 +898,7 @@ used the ID `muse-wonder-full`. Muse replied that this model does not exist,
 and no run got a Muse review. The checks counted only Claude and Codex
 seats, so all 8 runs passed.
 
-The skill now gives the IDs `claude-fable-5-2`, `gpt-6-astra` and
+The skill then gave the IDs `claude-fable-5-2`, `gpt-6-astra` and
 `muse-wonder-full-1.0`. When the sandbox has a Muse login, the checks of
 `council-review-pr` and `council-design` also need one `muse exec` launch
 without the line `agent loop failed:`. The sandbox writes an empty
@@ -941,7 +941,7 @@ not a seat.
 
 A Codex subagent counts when it gives a final answer
 with a default model. A Claude `Agent` call does not count, because it takes
-only a model alias, such as `fable`. The default GPT seat is now
+only a model alias, such as `fable`. The default GPT seat was then
 `gpt-6.1-sol`. Both cases need `claude` and `codex` on the `PATH`.
 
 | Case | Model | Pass | Seats in the log |

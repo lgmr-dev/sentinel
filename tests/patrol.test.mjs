@@ -34,8 +34,8 @@ const CONFIG = {
   merge: { method: 'squash', required_checks: ['ci'] },
 };
 const MODELS = {
-  opus: { model: 'claude-opus-5-5', family: 'claude' }, fable: { model: 'claude-fable-5-1', family: 'claude' },
-  astra: { model: 'gpt-6-astra', family: 'gpt' }, muse: { model: 'muse-wonder-full-1.0', family: 'muse' },
+  opus: { model: 'claude-opus-5-5', family: 'claude' }, fable: { model: 'claude-fable-5-2', family: 'claude' },
+  astra: { model: 'gpt-6.2-astra', family: 'gpt' }, muse: { model: 'muse-wonder-full-1.0', family: 'muse' },
 };
 const LEAD = 'claude-opus-5-5';
 const T0 = Date.parse('2026-11-08T06:00:00Z');

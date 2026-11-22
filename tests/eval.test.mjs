@@ -39,7 +39,7 @@ async function evalCheck(name, check, { launches = [], wait = false, sessions = 
   const trace = [{ type: 'thread.started', thread_id: 'chair' },
     ...(wait ? [{ type: 'item.completed', item: { type: 'collab_tool_call', tool: 'wait' } }] : [])];
   await fs.writeFile(path.join(dir, 'trace.jsonl'), trace.map(e => JSON.stringify(e)).join('\n'));
-  for (const [i, { parent, phase, model = 'gpt-6.1-sol' }] of sessions.entries()) await fs.writeFile(path.join(sessionDir, `session-${i}.jsonl`), [
+  for (const [i, { parent, phase, model = 'gpt-6.2-sol' }] of sessions.entries()) await fs.writeFile(path.join(sessionDir, `session-${i}.jsonl`), [
     { type: 'session_meta', payload: { id: `session-${i}`, source: parent ? { subagent: { thread_spawn: { parent_thread_id: parent } } } : 'exec' } },
     { type: 'turn_context', payload: { model } },
     { type: 'response_item', payload: { type: 'message', role: 'assistant', phase } },
@@ -86,7 +86,7 @@ test('the sol-loop check counts a Sol reviewer of the chair, not of another thre
   assert.equal(await reviewer({ sessions: [{ parent: 'other', phase: 'final_answer' }] }), false);
 });
 
-async function fakeRun(fakes) {
+async function fakeLogins(fakes) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'logins-'));
   const bin = path.join(dir, 'bin'), home = path.join(dir, 'home');
   await fs.mkdir(bin);
@@ -98,8 +98,15 @@ async function fakeRun(fakes) {
   for (const [name, body] of Object.entries({ codex: 'cat >/dev/null\nexit 1', ...fakes })) await fs.writeFile(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
   const env = { ...process.env, HOME: home, PATH: `${bin}${path.delimiter}${process.env.PATH}`, CLAUDE_CODE_OAUTH_TOKEN: 'claude-token-0123456789abcdef', META_API_KEY: museKey };
   for (const key of ['CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'XDG_CONFIG_HOME']) delete env[key];
+  return { dir, env };
+}
+
+const resultsOf = r => path.resolve(fileURLToPath(new URL('..', import.meta.url)), r.stdout.match(/Results: (\S+)/)[1]);
+
+async function fakeRun(fakes) {
+  const { dir, env } = await fakeLogins(fakes);
   const r = spawnSync(process.execPath, [script, '--case', 'neg-council-review', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'codex'], { encoding: 'utf8', env });
-  const results = path.resolve(fileURLToPath(new URL('..', import.meta.url)), r.stdout.match(/Results: (\S+)/)[1]);
+  const results = resultsOf(r);
   const run = path.join(results, 'neg-council-review', 'opus-5.5-xhigh', 'with-1');
   const archive = path.join(run, 'sandbox.tgz');
   const out = {
@@ -133,7 +140,7 @@ test('a run logs the exit code and the output size of each nested claude, codex 
   const { final, launches } = await fakeRun({
     claude: chair(`if [ "$1" = --version ]; then echo 9.9; exit 0; fi
 claude --version >/dev/null
-echo brief | codex exec --model gpt-6.1-sol - >/dev/null 2>&1
+echo brief | codex exec --model gpt-6.2-astra - >/dev/null 2>&1
 muse exec --model muse-wonder-full-1.0 Review | head -c 1 >/dev/null
 result="seats ran"`),
     codex: 'cat >/dev/null\necho "codex failed" >&2\nexit 2',
@@ -142,7 +149,7 @@ result="seats ran"`),
   assert.equal(final, 'seats ran');
   assert.deepEqual(launches, [
     { cli: 'claude', args: ['--version'], code: 0, bytes: 4 },
-    { cli: 'codex', args: ['exec', '--model', 'gpt-6.1-sol', '-'], code: 2, bytes: 0 },
+    { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 2, bytes: 0 },
     { cli: 'muse', args: ['exec', '--model', 'muse-wonder-full-1.0', 'Review'], code: 0, bytes: 12 },
   ]);
 });
@@ -157,4 +164,30 @@ result="$(cat stopped 2>/dev/null || echo running)"`),
     muse: 'trap \'echo stopped > stopped; exit 143\' TERM\ntouch ready\nsleep 3 &\nwait',
   });
   assert.equal(final, 'stopped');
+});
+
+test('a rejudge of a run that an old Codex judge graded asks the current Codex judge', { skip: process.platform === 'win32' }, async () => {
+  const { dir, env } = await fakeLogins({
+    claude: `cat >/dev/null
+case " $* " in
+*" --json-schema "*) while [ $# -gt 0 ]; do [ "$1" = --model ] && echo "claude $2" >> "$JUDGE_LOG"; shift; done
+  echo '{"is_error":false,"result":"","structured_output":{"pass":true,"reason":"ok"}}' ;;
+*) ${chair('result=done')} ;;
+esac`,
+    codex: `cat >/dev/null
+while [ $# -gt 0 ]; do case "$1" in -m) echo "codex $2" >> "$JUDGE_LOG" ;; -o) answer="$2" ;; esac; shift; done
+echo '{"pass":true,"reason":"ok"}' > "$answer"`,
+  });
+  env.JUDGE_LOG = path.join(dir, 'judges.log');
+  const config = JSON.parse(await fs.readFile(new URL('../evals/targets.json', import.meta.url), 'utf8'));
+  const codexJudge = config.judges.find(j => j.host === 'codex').model;
+  const oldJudge = config.targets.find(t => t.host === 'codex' && t.model !== codexJudge).model;
+  const first = resultsOf(spawnSync(process.execPath, [script, '--case', 'neg-council-review', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'claude,codex'], { encoding: 'utf8', env }));
+  const runs = path.join(first, 'runs.jsonl');
+  await fs.writeFile(runs, (await fs.readFile(runs, 'utf8')).replaceAll(`"judge":"${codexJudge}"`, `"judge":"${oldJudge}"`));
+  await fs.rm(env.JUDGE_LOG);
+  const again = resultsOf(spawnSync(process.execPath, [script, '--rejudge', first], { encoding: 'utf8', env }));
+  const asked = new Set((await fs.readFile(env.JUDGE_LOG, 'utf8')).trim().split('\n'));
+  for (const folder of [first, again, dir]) await fs.rm(folder, { recursive: true, force: true });
+  assert.deepEqual([...asked].sort(), [`claude ${config.judges.find(j => j.host === 'claude').model}`, `codex ${codexJudge}`]);
 });
