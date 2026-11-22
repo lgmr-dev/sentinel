@@ -999,9 +999,12 @@ ran 3 times on each target, with the Astra seat:
   that `harnessNoteCount` and `harnessTailCount` count. A background call
   counts only when its task notification has `summary_is_report`. Without
   that flag, the summary can be a harness note or the description of the call.
-- **Model:** the check reads the last entry of `modelsUsed`. When the
-  subagent used one model, the result has no `modelsUsed`, and the check
-  reads `resolvedModel`.
+- **Model:** for a foreground call, the check reads the last entry of
+  `modelsUsed`. When the subagent used one model, the result has no
+  `modelsUsed`, and the check reads `resolvedModel`. A background call has
+  only its launch result, with the launch model. So the check reads the model
+  of the last message of the subagent in the trace. When the trace has no such
+  message, the check reads `resolvedModel`.
 - **Limit:** Claude Code 2.1.308 and 2.1.311 do not write
   `summary_is_report`, so a background seat from these versions does not
   count. The saved background calls of these versions have no

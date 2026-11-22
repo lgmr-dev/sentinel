@@ -168,8 +168,12 @@ export function councilSeats() {
   const report = ({ content = [], harnessNoteCount = 0, harnessTailCount = 0 }) => content.slice(harnessNoteCount, content.length - harnessTailCount);
   const answered = (result, id) => result.status === 'completed' ? report(result).some(part => part.text?.trim())
     : result.status === 'async_launched' && trace.some(e => e.type === 'system' && e.subtype === 'task_notification' && e.tool_use_id === id && e.status === 'completed' && e.summary_is_report);
-  const claudeSubagents = trace.filter(e => !e.parent_tool_use_id && councilModels.includes(e.tool_use_result?.modelsUsed?.at(-1) ?? e.tool_use_result?.resolvedModel))
-    .flatMap(e => (e.message?.content ?? []).filter(part => part.type === 'tool_result' && answered(e.tool_use_result, part.tool_use_id)));
+  const lastModel = (result, id) => result.status === 'async_launched'
+    ? trace.findLast(e => e.parent_tool_use_id === id && e.message?.model)?.message.model ?? result.resolvedModel
+    : result.modelsUsed?.at(-1) ?? result.resolvedModel;
+  const claudeSubagents = trace.filter(e => !e.parent_tool_use_id && e.tool_use_result?.resolvedModel)
+    .flatMap(e => (e.message?.content ?? []).filter(part => part.type === 'tool_result' && councilModels.includes(lastModel(e.tool_use_result, part.tool_use_id))
+      && answered(e.tool_use_result, part.tool_use_id)));
   return {
     claude: replied.filter(run => run.cli === 'claude' && run.args.some(arg => arg === '-p' || arg === '--print')).length + claudeSubagents.length,
     codex: replied.filter(run => run.cli === 'codex' && run.args.includes('exec') && !run.args.includes('resume')).length

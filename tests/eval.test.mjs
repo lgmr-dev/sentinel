@@ -88,6 +88,9 @@ test('the council check counts a Claude Code subagent that ran the Fable model a
   assert.equal(await seats({ trace: sync({ modelsUsed: ['claude-fable-5-2', 'claude-opus-5-5'] }) }), false);
   assert.equal(await seats({ trace: sync({ resolvedModel: 'claude-opus-5-5', modelsUsed: ['claude-opus-5-5', 'claude-fable-5-2'] }) }), true);
   assert.equal(await seats({ trace: sync({}, { parent_tool_use_id: 'outer' }) }), false);
+  const reply = model => ({ type: 'assistant', parent_tool_use_id: 'seat', message: { model, content: text(['Findings']) } });
+  assert.equal(await seats({ trace: async().toSpliced(2, 0, reply('claude-fable-5-2')) }), true);
+  assert.equal(await seats({ trace: async().toSpliced(2, 0, reply('claude-fable-5-2'), reply('claude-opus-5-5')) }), false);
   assert.equal(await seats({ trace: async().slice(0, 2) }), false);
   assert.equal(await seats({ trace: async({ summary: 'NOTE: this agent stopped at its 1-turn limit and had produced no report.', summary_is_report: undefined }) }), false);
   assert.equal(await seats({ trace: async({ tool_use_id: 'other' }) }), false);
