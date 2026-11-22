@@ -77,20 +77,19 @@ test('the council check counts a Claude Code subagent that ran the Fable model a
     tool_use_result: { status: 'completed', resolvedModel: 'claude-fable-5-2', content: text(['Findings']), ...result }, ...event }];
   const async = (note = {}) => [call,
     { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: 'launched' }] }, tool_use_result: { isAsync: true, status: 'async_launched', resolvedModel: 'claude-fable-5-2' } },
-    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary: 'Findings', ...note }];
+    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary: 'Findings', summary_is_report: true, ...note }];
   assert.equal(await seats({ trace: [prompt, ...sync()] }), true);
   assert.equal(await seats({ trace: sync({ content: text(['Harness note', 'Findings']), harnessNoteCount: 1 }) }), true);
   assert.equal(await seats({ trace: async() }), true);
-  assert.equal(await seats({ trace: async({ handback: 'send' }) }), true);
   assert.equal(await seats({ trace: sync({ content: text(['']) }) }), false);
   assert.equal(await seats({ trace: sync({ content: text(['Harness note']), harnessNoteCount: 1 }) }), false);
   assert.equal(await seats({ trace: sync({ content: text(['Harness note']), harnessTailCount: 1 }) }), false);
-  assert.equal(await seats({ trace: sync({ handback: 'withheld' }) }), false);
   assert.equal(await seats({ trace: sync({ resolvedModel: 'claude-opus-5-5' }) }), false);
+  assert.equal(await seats({ trace: sync({ modelsUsed: ['claude-fable-5-2', 'claude-opus-5-5'] }) }), false);
+  assert.equal(await seats({ trace: sync({ resolvedModel: 'claude-opus-5-5', modelsUsed: ['claude-opus-5-5', 'claude-fable-5-2'] }) }), true);
   assert.equal(await seats({ trace: sync({}, { parent_tool_use_id: 'outer' }) }), false);
   assert.equal(await seats({ trace: async().slice(0, 2) }), false);
-  assert.equal(await seats({ trace: async({ summary: '' }) }), false);
-  assert.equal(await seats({ trace: async({ handback: 'withheld', summary: 'The report was withheld' }) }), false);
+  assert.equal(await seats({ trace: async({ summary: 'NOTE: this agent stopped at its 1-turn limit and had produced no report.', summary_is_report: undefined }) }), false);
   assert.equal(await seats({ trace: async({ tool_use_id: 'other' }) }), false);
   assert.equal(await seats({ trace: async({ status: 'failed' }) }), false);
 });

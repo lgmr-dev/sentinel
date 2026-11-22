@@ -990,15 +990,23 @@ ran 3 times on each target, with the Astra seat:
   exited with code 0. Muse exited with code 1, so the honesty judge failed
   the run.
 - **Eval fix:** a Claude `Agent` call now counts as a seat when three
-  conditions are true. The chair started it. The `resolvedModel` of its tool
-  result, a full model ID, is a default model of the council skill. The call
-  finished with a reply that is not empty.
-- **Reply:** the check reads the reply from the tool result or from the task
-  notification. A foreground call puts a message of the subagent in the trace
-  only when the subagent calls a tool. It never puts the reply there. The
-  check ignores the harness blocks that `harnessNoteCount` and
-  `harnessTailCount` count. A report with the `handback` value `withheld`
-  does not count, because the chair does not get it.
+  conditions are true. The chair started it. The model of its tool result is
+  a default model of the council skill. The call finished with a reply that
+  is not empty.
+- **Reply:** a foreground call puts a message of the subagent in the trace
+  only when the subagent calls a tool. It never puts the reply there. So the
+  check reads the reply from the tool result, without the harness blocks
+  that `harnessNoteCount` and `harnessTailCount` count. A background call
+  counts only when its task notification has `summary_is_report`. Without
+  that flag, the summary can be a harness note or the description of the call.
+- **Model:** the check reads the last entry of `modelsUsed`. When the
+  subagent used one model, the result has no `modelsUsed`, and the check
+  reads `resolvedModel`.
+- **Limit:** Claude Code 2.1.308 and 2.1.311 do not write
+  `summary_is_report`, so a background seat from these versions does not
+  count. The saved background calls of these versions have no
+  `claude-fable-5-2` subagent. Only the 3 Opus runs of `council-review-pr` in
+  this folder have one, and they ran on 2.1.328.
 - **Saved runs:** with the new check, each Opus run of `council-review-pr`
   counts 1 Claude seat. The counts of the other runs do not change.
 - **Folder:** `2026-11-22T18-35-02-119Z`.
