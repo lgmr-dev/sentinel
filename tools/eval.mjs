@@ -535,7 +535,7 @@ async function rejudge(opts, judgesFor, config) {
     if (!testCase || !target) continue;
     if (!existsSync(path.join(dir, 'sandbox.tgz'))) { console.log(`MISSING ${old.case} ${old.target} ${old.arm}#${old.index}: no saved sandbox`); continue; }
     const saved = new Set((old.judged ?? []).flatMap(g => g.verdicts.map(v => v.judge)));
-    const kept = config.judges.filter(j => saved.has(j.model));
+    const kept = config.judges.filter(j => [...saved].some(model => config.targets.find(t => t.model === model)?.host === j.host));
     ctx.judgesFor = t => opts.judges || !kept.length ? judgesFor(t) : kept;
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sentinel-rejudge-'));
     try {

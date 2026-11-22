@@ -64,7 +64,7 @@ test('the council check counts a Claude seat and an Astra seat that ran the defa
   assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '-v'] }], sessions: [astraSeat] }), false);
   assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 1, bytes: 0 }] }), false);
   assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, model: 'gpt-6-luna' }] }), false);
-  assert.equal(await seats({ launches: [fable], sessions: [{ parent: 'chair', phase: 'commentary' }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, phase: 'commentary' }] }), false);
   assert.equal(await seats({ launches: [fable], wait: true }), false);
 });
 
