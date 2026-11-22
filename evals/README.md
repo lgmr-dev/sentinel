@@ -992,9 +992,13 @@ ran 3 times on each target, with the Astra seat:
 - **Eval fix:** a Claude `Agent` call now counts as a seat when three
   conditions are true. The chair started it. The `resolvedModel` of its tool
   result, a full model ID, is a default model of the council skill. The call
-  finished with a reply that is not empty. A foreground call does not put the
-  messages of the subagent in the trace. So the check reads the model only
-  from the tool result.
+  finished with a reply that is not empty.
+- **Reply:** the check reads the reply from the tool result or from the task
+  notification. A foreground call puts a message of the subagent in the trace
+  only when the subagent calls a tool. It never puts the reply there. The
+  check ignores the harness blocks that `harnessNoteCount` and
+  `harnessTailCount` count. A report with the `handback` value `withheld`
+  does not count, because the chair does not get it.
 - **Saved runs:** with the new check, each Opus run of `council-review-pr`
   counts 1 Claude seat. The counts of the other runs do not change.
 - **Folder:** `2026-11-22T18-35-02-119Z`.

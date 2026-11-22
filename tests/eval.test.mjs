@@ -72,17 +72,27 @@ test('the council check counts a Claude Code subagent that ran the Fable model a
   const seats = options => evalCheck('council-design', 'asks at least two other models', { sessions: [astraSeat], ...options });
   const call = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'seat', name: 'Agent', input: { model: 'fable' } }] } };
   const prompt = { type: 'user', message: { role: 'user', content: 'Review the plan' } };
-  const sync = (resolvedModel, text = 'Findings') => [call, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: [{ type: 'text', text }] }] },
-    tool_use_result: { status: 'completed', resolvedModel, content: [{ type: 'text', text }] } }];
-  const async = (summary = 'Findings') => [call,
+  const text = texts => texts.map(t => ({ type: 'text', text: t }));
+  const sync = (result = {}, event = {}) => [call, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: text(['Findings']) }] },
+    tool_use_result: { status: 'completed', resolvedModel: 'claude-fable-5-2', content: text(['Findings']), ...result }, ...event }];
+  const async = (note = {}) => [call,
     { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: 'launched' }] }, tool_use_result: { isAsync: true, status: 'async_launched', resolvedModel: 'claude-fable-5-2' } },
-    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary }];
-  assert.equal(await seats({ trace: [prompt, ...sync('claude-fable-5-2')] }), true);
+    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary: 'Findings', ...note }];
+  assert.equal(await seats({ trace: [prompt, ...sync()] }), true);
+  assert.equal(await seats({ trace: sync({ content: text(['Harness note', 'Findings']), harnessNoteCount: 1 }) }), true);
   assert.equal(await seats({ trace: async() }), true);
+  assert.equal(await seats({ trace: async({ handback: 'send' }) }), true);
+  assert.equal(await seats({ trace: sync({ content: text(['']) }) }), false);
+  assert.equal(await seats({ trace: sync({ content: text(['Harness note']), harnessNoteCount: 1 }) }), false);
+  assert.equal(await seats({ trace: sync({ content: text(['Harness note']), harnessTailCount: 1 }) }), false);
+  assert.equal(await seats({ trace: sync({ handback: 'withheld' }) }), false);
+  assert.equal(await seats({ trace: sync({ resolvedModel: 'claude-opus-5-5' }) }), false);
+  assert.equal(await seats({ trace: sync({}, { parent_tool_use_id: 'outer' }) }), false);
   assert.equal(await seats({ trace: async().slice(0, 2) }), false);
-  assert.equal(await seats({ trace: async('') }), false);
-  assert.equal(await seats({ trace: sync('claude-fable-5-2', '') }), false);
-  assert.equal(await seats({ trace: sync('claude-opus-5-5') }), false);
+  assert.equal(await seats({ trace: async({ summary: '' }) }), false);
+  assert.equal(await seats({ trace: async({ handback: 'withheld', summary: 'The report was withheld' }) }), false);
+  assert.equal(await seats({ trace: async({ tool_use_id: 'other' }) }), false);
+  assert.equal(await seats({ trace: async({ status: 'failed' }) }), false);
 });
 
 test('the council checks need a Muse seat that replied, when the sandbox has a Muse login', async () => {

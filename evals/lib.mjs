@@ -165,11 +165,12 @@ export function councilSeats() {
     && !run.args.some(arg => ['--help', '-h', 'help', '--version', '-V', '-v'].includes(arg)));
   const trace = events();
   const chair = trace.find(e => e.type === 'thread.started')?.thread_id;
-  const blocks = content => Array.isArray(content) ? content : [];
-  const answered = (result, id) => result.status === 'completed' ? blocks(result.content).some(part => part.text?.trim())
-    : result.status === 'async_launched' && trace.some(e => e.type === 'system' && e.subtype === 'task_notification' && e.tool_use_id === id && e.status === 'completed' && String(e.summary ?? '').trim());
+  const report = ({ content = [], harnessNoteCount = 0, harnessTailCount = 0 }) => content.slice(harnessNoteCount, content.length - harnessTailCount);
+  const answered = (result, id) => result.handback !== 'withheld' && (result.status === 'completed' ? report(result).some(part => part.text?.trim())
+    : result.status === 'async_launched' && trace.some(e => e.type === 'system' && e.subtype === 'task_notification' && e.tool_use_id === id && e.status === 'completed'
+      && e.handback !== 'withheld' && String(e.summary ?? '').trim()));
   const claudeSubagents = trace.filter(e => !e.parent_tool_use_id && councilModels.includes(e.tool_use_result?.resolvedModel))
-    .flatMap(e => blocks(e.message?.content).filter(part => part.type === 'tool_result' && answered(e.tool_use_result, part.tool_use_id)));
+    .flatMap(e => (e.message?.content ?? []).filter(part => part.type === 'tool_result' && answered(e.tool_use_result, part.tool_use_id)));
   return {
     claude: replied.filter(run => run.cli === 'claude' && run.args.some(arg => arg === '-p' || arg === '--print')).length + claudeSubagents.length,
     codex: replied.filter(run => run.cli === 'codex' && run.args.includes('exec') && !run.args.includes('resume')).length
