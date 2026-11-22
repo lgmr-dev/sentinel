@@ -181,7 +181,7 @@ echo '{"pass":true,"reason":"ok"}' > "$answer"`,
   env.JUDGE_LOG = path.join(dir, 'judges.log');
   const config = JSON.parse(await fs.readFile(new URL('../evals/targets.json', import.meta.url), 'utf8'));
   const codexJudge = config.judges.find(j => j.host === 'codex').model;
-  const oldJudge = config.targets.find(t => t.host === 'codex' && t.model !== codexJudge).model;
+  const oldJudge = 'gpt-6.1-sol';
   const first = resultsOf(spawnSync(process.execPath, [script, '--case', 'neg-council-review', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'claude,codex'], { encoding: 'utf8', env }));
   const runs = path.join(first, 'runs.jsonl');
   await fs.writeFile(runs, (await fs.readFile(runs, 'utf8')).replaceAll(`"judge":"${codexJudge}"`, `"judge":"${oldJudge}"`));

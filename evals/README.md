@@ -12,8 +12,18 @@ how badly it can fail.
 | `make eval ARGS="--ab"` | A/B. Each case runs **with** and **without** its skill or rule, on the 5 default models, with both judges. It prints the trust table. Use it for a new or removed skill, a rewrite of a skill, or a new or removed rules section. |
 | `make eval ARGS="--ab --arms without"` | An A/B that runs only the named arm. The **without** arm does not change with the skill, so a climb can run it once and join its `runs.jsonl` with the runs of each new skill text. Put both arms in one folder for `tools/trust.mjs`, because it keeps only the last folder for each case and target. |
 | `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
-| `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. A saved judge model that is not a current judge gets the current judge of its host. The host comes from the target row of that model in `targets.json`. A model with no target row gets no judge. When no saved judge model has a target row, the rejudge picks the judges as a new run does. The council checks read the seat models from the current council skill, so a council run from before a change of the seats counts 0 seats for each model that changed. |
+| `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. |
 | `node tools/trust.mjs <results folder>...` | Prints the trust table of saved A/B runs. |
+
+A rejudge keeps each saved judge model that is still a current judge. Each
+other saved judge model gets the current judge of its host. The host comes from
+the target row of that model in `targets.json`. A model with no target row gets
+no judge. When the rejudge keeps no judge, it picks the judges as a new run
+does.
+
+The council checks of a rejudge read the seat models from the current council
+skill. So a council run from before a change of the seats counts 0 seats for
+each changed model.
 
 In an A/B run, the arms are:
 
