@@ -950,8 +950,8 @@ also names a default model of the council skill. A help or version call is
 not a seat.
 
 A Codex subagent counts when it gives a final answer
-with a default model. A Claude `Agent` call does not count, because it takes
-only a model alias, such as `fable`. The default GPT seat was then
+with a default model. A Claude `Agent` call did not count then, because it
+takes only a model alias, such as `fable`. The default GPT seat was then
 `gpt-6.1-sol`. Both cases need `claude` and `codex` on the `PATH`.
 
 | Case | Model | Pass | Seats in the log |
@@ -966,6 +966,33 @@ only a model alias, such as `fable`. The default GPT seat was then
 - **Rejudge:** an archive from before this change has no `launches.jsonl`.
   A rejudge of it fails the council check with 0 seats.
 - **Folder:** `2026-11-12T06-07-58-071Z`.
+
+## Results of 22 November 2026: Claude subagent seats
+
+Pull request #82 made GPT-6.2 Astra the default GPT seat. The council cases
+ran 3 times on each target, with the Astra seat:
+
+| Case | Model | Pass | Seats that the check counted |
+| --- | --- | --- | --- |
+| `council-design` | Opus | 0/3 | 1 Claude, 2 Codex |
+| `council-design` | Sol | 0/3 | 2 Claude, 1 Codex |
+| `council-review-pr` | Opus | 0/3 | 0 Claude, 1 Codex |
+| `council-review-pr` | Sol | 0/3 | 1 Claude, 1 Codex |
+
+- **Muse:** each run failed the Muse check. The Muse API replied 429
+  "Subscription quota exhausted", so no Muse seat replied.
+- **Astra:** each chair started a `gpt-6.2-astra` seat that the check
+  counted. Sol started it as a Codex subagent, and Opus with `codex exec`.
+- **Claude subagent:** in `council-review-pr`, Opus started the Fable seat
+  with the Claude `Agent` tool and the alias `fable`. The check did not count
+  it.
+- **Eval fix:** a Claude `Agent` call now counts as a seat when three
+  conditions are true. The chair started it. A message of the subagent names
+  a default model of the council skill. The call finished. The messages of
+  the subagent give the full model ID, also when the call gives an alias.
+- **Saved runs:** with the new check, each Opus run of `council-review-pr`
+  counts 1 Claude seat. The counts of the other runs do not change.
+- **Folder:** `2026-11-22T18-35-02-119Z`.
 
 ## Case format
 

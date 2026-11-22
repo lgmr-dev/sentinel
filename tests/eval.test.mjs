@@ -25,7 +25,7 @@ test('--resume refuses a folder with two finished rows of one run', async () => 
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-async function evalCheck(name, check, { launches = [], wait = false, sessions = [], muse = false }) {
+async function evalCheck(name, check, { launches = [], wait = false, sessions = [], muse = false, trace: chairEvents = [] }) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'check-'));
   const work = path.join(dir, 'work'), home = path.join(dir, 'home'), sessionDir = path.join(home, '.codex', 'sessions');
   await fs.mkdir(work, { recursive: true });
@@ -37,7 +37,7 @@ async function evalCheck(name, check, { launches = [], wait = false, sessions = 
   if (muse) await fs.writeFile(path.join(dir, 'muse-login'), '');
   spawnSync('git', ['init', '-q'], { cwd: work });
   const trace = [{ type: 'thread.started', thread_id: 'chair' },
-    ...(wait ? [{ type: 'item.completed', item: { type: 'collab_tool_call', tool: 'wait' } }] : [])];
+    ...(wait ? [{ type: 'item.completed', item: { type: 'collab_tool_call', tool: 'wait' } }] : []), ...chairEvents];
   await fs.writeFile(path.join(dir, 'trace.jsonl'), trace.map(e => JSON.stringify(e)).join('\n'));
   for (const [i, { parent, phase, model = 'gpt-6.2-sol' }] of sessions.entries()) await fs.writeFile(path.join(sessionDir, `session-${i}.jsonl`), [
     { type: 'session_meta', payload: { id: `session-${i}`, source: parent ? { subagent: { thread_spawn: { parent_thread_id: parent } } } : 'exec' } },
@@ -66,6 +66,24 @@ test('the council check counts a Claude seat and an Astra seat that ran the defa
   assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, model: 'gpt-6-luna' }] }), false);
   assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, phase: 'commentary' }] }), false);
   assert.equal(await seats({ launches: [fable], wait: true }), false);
+});
+
+test('the council check counts a Claude Code subagent that ran the Fable model and finished', async () => {
+  const seats = options => evalCheck('council-design', 'asks at least two other models', { sessions: [astraSeat], ...options });
+  const subagent = (model, finished) => [
+    { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'seat', name: 'Agent', input: { model: 'fable' } }] } },
+    { type: 'assistant', parent_tool_use_id: 'seat', message: { model, content: [{ type: 'text', text: 'Findings' }] } },
+    ...finished,
+  ];
+  const sync = [{ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: 'Findings' }] }, tool_use_result: { status: 'completed' } }];
+  const async = [
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: 'launched' }] }, tool_use_result: { isAsync: true, status: 'async_launched' } },
+    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed' },
+  ];
+  assert.equal(await seats({ trace: subagent('claude-fable-5-2', sync) }), true);
+  assert.equal(await seats({ trace: subagent('claude-fable-5-2', async) }), true);
+  assert.equal(await seats({ trace: subagent('claude-fable-5-2', async.slice(0, 1)) }), false);
+  assert.equal(await seats({ trace: subagent('claude-opus-5-5', sync) }), false);
 });
 
 test('the council checks need a Muse seat that replied, when the sandbox has a Muse login', async () => {

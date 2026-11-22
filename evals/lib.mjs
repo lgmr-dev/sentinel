@@ -163,9 +163,14 @@ function model(args) {
 export function councilSeats() {
   const replied = launches().filter(run => run.code === 0 && run.bytes > 0 && councilModels.includes(model(run.args))
     && !run.args.some(arg => ['--help', '-h', 'help', '--version', '-V', '-v'].includes(arg)));
-  const chair = events().find(e => e.type === 'thread.started')?.thread_id;
+  const trace = events();
+  const chair = trace.find(e => e.type === 'thread.started')?.thread_id;
+  const subagents = new Set(trace.flatMap(e => e.parent_tool_use_id ? [] : (e.message?.content ?? []).filter(part => part.type === 'tool_use' && part.name === 'Agent').map(part => part.id)));
+  const finished = id => trace.some(e => (e.type === 'system' && e.subtype === 'task_notification' && e.tool_use_id === id && e.status === 'completed')
+    || (e.tool_use_result?.status === 'completed' && (e.message?.content ?? []).some(part => part.type === 'tool_result' && part.tool_use_id === id)));
+  const claudeSubagents = [...subagents].filter(id => finished(id) && trace.some(e => e.parent_tool_use_id === id && councilModels.includes(e.message?.model)));
   return {
-    claude: replied.filter(run => run.cli === 'claude' && run.args.some(arg => arg === '-p' || arg === '--print')).length,
+    claude: replied.filter(run => run.cli === 'claude' && run.args.some(arg => arg === '-p' || arg === '--print')).length + claudeSubagents.length,
     codex: replied.filter(run => run.cli === 'codex' && run.args.includes('exec') && !run.args.includes('resume')).length
       + codexSessions().filter(s => s.replied && s.parent && s.parent === chair && councilModels.includes(s.model)).length,
     muse: replied.filter(run => run.cli === 'muse' && run.args.includes('exec')).length,
