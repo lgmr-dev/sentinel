@@ -218,6 +218,23 @@ test('online verification asks only the API, with GH_TOKEN, and downloads no fil
   assert.deepEqual(await requestsWithToken(f, 'verify'), ['api.github.com Bearer token-for-test trees']);
 }));
 
+test('online verification reads anonymously when the upstream organization refuses the token by IP allow list', async () => fixture(async f => {
+  await f.invoke('sync');
+  const refusal = { message: 'Although you appear to have the correct authorization credentials, the `example` organization has an IP allow list enabled, and your IP address is not permitted to access this resource.' };
+  const previous = process.env.GH_TOKEN;
+  process.env.GH_TOKEN = 'token-for-test';
+  const sent = [];
+  try {
+    await f.invoke('verify', async (url, options) => {
+      sent.push(options.headers.Authorization ?? 'anonymous');
+      return options.headers.Authorization ? Response.json(refusal, { status: 403 }) : f.fetchImpl(url, options);
+    });
+  } finally {
+    if (previous === undefined) delete process.env.GH_TOKEN; else process.env.GH_TOKEN = previous;
+  }
+  assert.deepEqual(sent, ['Bearer token-for-test', 'anonymous']);
+}));
+
 test('the tool runs its CLI only as the entry module, and an import does not fail when argv names no file', () => {
   const tool = new URL('../tools/upstream.mjs', import.meta.url);
   const started = spawnSync(process.execPath, [fileURLToPath(tool)], { encoding: 'utf8' });
