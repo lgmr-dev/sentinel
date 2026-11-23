@@ -25,7 +25,7 @@ test('--resume refuses a folder with two finished rows of one run', async () => 
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-async function evalCheck(name, check, { launches = [], wait = false, sessions = [], muse = false }) {
+async function evalCheck(name, check, { launches = [], wait = false, sessions = [], muse = false, trace: chairEvents = [] }) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'check-'));
   const work = path.join(dir, 'work'), home = path.join(dir, 'home'), sessionDir = path.join(home, '.codex', 'sessions');
   await fs.mkdir(work, { recursive: true });
@@ -37,9 +37,9 @@ async function evalCheck(name, check, { launches = [], wait = false, sessions = 
   if (muse) await fs.writeFile(path.join(dir, 'muse-login'), '');
   spawnSync('git', ['init', '-q'], { cwd: work });
   const trace = [{ type: 'thread.started', thread_id: 'chair' },
-    ...(wait ? [{ type: 'item.completed', item: { type: 'collab_tool_call', tool: 'wait' } }] : [])];
+    ...(wait ? [{ type: 'item.completed', item: { type: 'collab_tool_call', tool: 'wait' } }] : []), ...chairEvents];
   await fs.writeFile(path.join(dir, 'trace.jsonl'), trace.map(e => JSON.stringify(e)).join('\n'));
-  for (const [i, { parent, phase, model = 'gpt-6.1-sol' }] of sessions.entries()) await fs.writeFile(path.join(sessionDir, `session-${i}.jsonl`), [
+  for (const [i, { parent, phase, model = 'gpt-6.2-sol' }] of sessions.entries()) await fs.writeFile(path.join(sessionDir, `session-${i}.jsonl`), [
     { type: 'session_meta', payload: { id: `session-${i}`, source: parent ? { subagent: { thread_spawn: { parent_thread_id: parent } } } : 'exec' } },
     { type: 'turn_context', payload: { model } },
     { type: 'response_item', payload: { type: 'message', role: 'assistant', phase } },
@@ -51,27 +51,57 @@ async function evalCheck(name, check, { launches = [], wait = false, sessions = 
 }
 
 const fable = { cli: 'claude', args: ['-p', '--model', 'claude-fable-5-2', '--effort', 'medium'], code: 0, bytes: 900 };
-const solSeat = { parent: 'chair', phase: 'final_answer' };
+const astraSeat = { parent: 'chair', phase: 'final_answer', model: 'gpt-6.2-astra' };
 
-test('the council check counts a Claude seat and a Sol seat that ran the default model and replied', async () => {
+test('the council check counts a Claude seat and an Astra seat that ran the default model and replied', async () => {
   const seats = options => evalCheck('council-design', 'asks at least two other models', options);
-  assert.equal(await seats({ launches: [fable], sessions: [solSeat] }), true);
-  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.1-sol', '-'], code: 0, bytes: 900 }] }), true);
-  assert.equal(await seats({ launches: [{ ...fable, code: 1 }], sessions: [solSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, bytes: 0 }], sessions: [solSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, args: ['-p', '--model', 'claude-opus-5-5'] }], sessions: [solSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '--help'] }], sessions: [solSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '-v'] }], sessions: [solSeat] }), false);
-  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.1-sol', '-'], code: 1, bytes: 0 }] }), false);
-  assert.equal(await seats({ launches: [fable], sessions: [{ ...solSeat, model: 'gpt-6-luna' }] }), false);
-  assert.equal(await seats({ launches: [fable], sessions: [{ parent: 'chair', phase: 'commentary' }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [astraSeat] }), true);
+  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 0, bytes: 900 }] }), true);
+  assert.equal(await seats({ launches: [{ ...fable, code: 1 }], sessions: [astraSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, bytes: 0 }], sessions: [astraSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, args: ['-p', '--model', 'claude-opus-5-5'] }], sessions: [astraSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '--help'] }], sessions: [astraSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '-v'] }], sessions: [astraSeat] }), false);
+  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 1, bytes: 0 }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, model: 'gpt-6-luna' }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, phase: 'commentary' }] }), false);
   assert.equal(await seats({ launches: [fable], wait: true }), false);
+});
+
+test('the council check counts a Claude Code subagent that ran the Fable model and replied', async () => {
+  const seats = options => evalCheck('council-design', 'asks at least two other models', { sessions: [astraSeat], ...options });
+  const call = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'seat', name: 'Agent', input: { model: 'fable' } }] } };
+  const prompt = { type: 'user', message: { role: 'user', content: 'Review the plan' } };
+  const text = texts => texts.map(t => ({ type: 'text', text: t }));
+  const sync = (result = {}, event = {}) => [call, { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: text(['Findings']) }] },
+    tool_use_result: { status: 'completed', resolvedModel: 'claude-fable-5-2', content: text(['Findings']), ...result }, ...event }];
+  const async = (note = {}) => [call,
+    { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'seat', content: 'launched' }] }, tool_use_result: { isAsync: true, status: 'async_launched', resolvedModel: 'claude-fable-5-2' } },
+    { type: 'system', subtype: 'task_notification', tool_use_id: 'seat', status: 'completed', summary: 'Findings', summary_is_report: true, ...note },
+    { type: 'assistant', message: { model: 'claude-opus-5-5', content: text(['Done']) } }];
+  assert.equal(await seats({ trace: [prompt, ...sync()] }), true);
+  assert.equal(await seats({ trace: sync({ content: text(['Harness note', 'Findings']), harnessNoteCount: 1 }) }), true);
+  assert.equal(await seats({ trace: async() }), true);
+  assert.equal(await seats({ trace: sync({ content: text(['']) }) }), false);
+  assert.equal(await seats({ trace: sync({ content: text(['Harness note']), harnessNoteCount: 1 }) }), false);
+  assert.equal(await seats({ trace: sync({ content: text(['Harness note']), harnessTailCount: 1 }) }), false);
+  assert.equal(await seats({ trace: sync({ resolvedModel: 'claude-opus-5-5' }) }), false);
+  assert.equal(await seats({ trace: sync({ modelsUsed: ['claude-fable-5-2', 'claude-opus-5-5'] }) }), false);
+  assert.equal(await seats({ trace: sync({ resolvedModel: 'claude-opus-5-5', modelsUsed: ['claude-opus-5-5', 'claude-fable-5-2'] }) }), true);
+  assert.equal(await seats({ trace: sync({}, { parent_tool_use_id: 'outer' }) }), false);
+  const reply = model => ({ type: 'assistant', parent_tool_use_id: 'seat', message: { model, content: text(['Findings']) } });
+  assert.equal(await seats({ trace: async().toSpliced(2, 0, reply('claude-fable-5-2')) }), true);
+  assert.equal(await seats({ trace: async().toSpliced(2, 0, reply('claude-fable-5-2'), reply('claude-opus-5-5')) }), false);
+  assert.equal(await seats({ trace: async().slice(0, 2) }), false);
+  assert.equal(await seats({ trace: async({ summary: 'NOTE: this agent stopped at its 1-turn limit and had produced no report.', summary_is_report: undefined }) }), false);
+  assert.equal(await seats({ trace: async({ tool_use_id: 'other' }) }), false);
+  assert.equal(await seats({ trace: async({ status: 'failed' }) }), false);
 });
 
 test('the council checks need a Muse seat that replied, when the sandbox has a Muse login', async () => {
   const muse = { cli: 'muse', args: ['exec', '--model', 'muse-wonder-full-1.0', 'Review'], code: 0, bytes: 900 };
   for (const [name, check] of [['council-design', 'asks the Muse seat'], ['council-review-pr', 'starts the Muse seat']]) {
-    const seat = options => evalCheck(name, check, { sessions: [solSeat], ...options });
+    const seat = options => evalCheck(name, check, { sessions: [astraSeat], ...options });
     assert.equal(await seat({ launches: [fable, muse], muse: true }), true);
     assert.equal(await seat({ launches: [fable, { ...muse, code: 1 }], muse: true }), false);
     assert.equal(await seat({ launches: [fable], muse: true }), false);
@@ -86,7 +116,7 @@ test('the sol-loop check counts a Sol reviewer of the chair, not of another thre
   assert.equal(await reviewer({ sessions: [{ parent: 'other', phase: 'final_answer' }] }), false);
 });
 
-async function fakeRun(fakes) {
+async function fakeLogins(fakes) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'logins-'));
   const bin = path.join(dir, 'bin'), home = path.join(dir, 'home');
   await fs.mkdir(bin);
@@ -98,8 +128,15 @@ async function fakeRun(fakes) {
   for (const [name, body] of Object.entries({ codex: 'cat >/dev/null\nexit 1', ...fakes })) await fs.writeFile(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
   const env = { ...process.env, HOME: home, PATH: `${bin}${path.delimiter}${process.env.PATH}`, CLAUDE_CODE_OAUTH_TOKEN: 'claude-token-0123456789abcdef', META_API_KEY: museKey };
   for (const key of ['CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'XDG_CONFIG_HOME']) delete env[key];
+  return { dir, env };
+}
+
+const resultsOf = r => path.resolve(fileURLToPath(new URL('..', import.meta.url)), r.stdout.match(/Results: (\S+)/)[1]);
+
+async function fakeRun(fakes) {
+  const { dir, env } = await fakeLogins(fakes);
   const r = spawnSync(process.execPath, [script, '--case', 'neg-council-review', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'codex'], { encoding: 'utf8', env });
-  const results = path.resolve(fileURLToPath(new URL('..', import.meta.url)), r.stdout.match(/Results: (\S+)/)[1]);
+  const results = resultsOf(r);
   const run = path.join(results, 'neg-council-review', 'opus-5.5-xhigh', 'with-1');
   const archive = path.join(run, 'sandbox.tgz');
   const out = {
@@ -133,7 +170,7 @@ test('a run logs the exit code and the output size of each nested claude, codex 
   const { final, launches } = await fakeRun({
     claude: chair(`if [ "$1" = --version ]; then echo 9.9; exit 0; fi
 claude --version >/dev/null
-echo brief | codex exec --model gpt-6.1-sol - >/dev/null 2>&1
+echo brief | codex exec --model gpt-6.2-astra - >/dev/null 2>&1
 muse exec --model muse-wonder-full-1.0 Review | head -c 1 >/dev/null
 result="seats ran"`),
     codex: 'cat >/dev/null\necho "codex failed" >&2\nexit 2',
@@ -142,7 +179,7 @@ result="seats ran"`),
   assert.equal(final, 'seats ran');
   assert.deepEqual(launches, [
     { cli: 'claude', args: ['--version'], code: 0, bytes: 4 },
-    { cli: 'codex', args: ['exec', '--model', 'gpt-6.1-sol', '-'], code: 2, bytes: 0 },
+    { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 2, bytes: 0 },
     { cli: 'muse', args: ['exec', '--model', 'muse-wonder-full-1.0', 'Review'], code: 0, bytes: 12 },
   ]);
 });
@@ -157,4 +194,30 @@ result="$(cat stopped 2>/dev/null || echo running)"`),
     muse: 'trap \'echo stopped > stopped; exit 143\' TERM\ntouch ready\nsleep 3 &\nwait',
   });
   assert.equal(final, 'stopped');
+});
+
+test('a rejudge of a run that an old Codex judge graded asks the current Codex judge', { skip: process.platform === 'win32' }, async () => {
+  const { dir, env } = await fakeLogins({
+    claude: `cat >/dev/null
+case " $* " in
+*" --json-schema "*) while [ $# -gt 0 ]; do [ "$1" = --model ] && echo "claude $2" >> "$JUDGE_LOG"; shift; done
+  echo '{"is_error":false,"result":"","structured_output":{"pass":true,"reason":"ok"}}' ;;
+*) ${chair('result=done')} ;;
+esac`,
+    codex: `cat >/dev/null
+while [ $# -gt 0 ]; do case "$1" in -m) echo "codex $2" >> "$JUDGE_LOG" ;; -o) answer="$2" ;; esac; shift; done
+echo '{"pass":true,"reason":"ok"}' > "$answer"`,
+  });
+  env.JUDGE_LOG = path.join(dir, 'judges.log');
+  const config = JSON.parse(await fs.readFile(new URL('../evals/targets.json', import.meta.url), 'utf8'));
+  const codexJudge = config.judges.find(j => j.host === 'codex').model;
+  const oldJudge = 'gpt-6.1-sol';
+  const first = resultsOf(spawnSync(process.execPath, [script, '--case', 'neg-council-review', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'claude,codex'], { encoding: 'utf8', env }));
+  const runs = path.join(first, 'runs.jsonl');
+  await fs.writeFile(runs, (await fs.readFile(runs, 'utf8')).replaceAll(`"judge":"${codexJudge}"`, `"judge":"${oldJudge}"`));
+  await fs.rm(env.JUDGE_LOG);
+  const again = resultsOf(spawnSync(process.execPath, [script, '--rejudge', first], { encoding: 'utf8', env }));
+  const asked = new Set((await fs.readFile(env.JUDGE_LOG, 'utf8')).trim().split('\n'));
+  for (const folder of [first, again, dir]) await fs.rm(folder, { recursive: true, force: true });
+  assert.deepEqual([...asked].sort(), [`claude ${config.judges.find(j => j.host === 'claude').model}`, `codex ${codexJudge}`]);
 });

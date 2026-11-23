@@ -77,8 +77,8 @@ PR with an agent from another model family.
 {
   "models": {
     "opus": { "provider": "claude", "model": "claude-opus-5-5", "family": "claude", "effort": "high" },
-    "fable": { "provider": "claude", "model": "claude-fable-5-1", "family": "claude", "effort": "high" },
-    "astra": { "provider": "codex", "model": "gpt-6-astra", "family": "gpt", "effort": "high" },
+    "fable": { "provider": "claude", "model": "claude-fable-5-2", "family": "claude", "effort": "high" },
+    "astra": { "provider": "codex", "model": "gpt-6.2-astra", "family": "gpt", "effort": "high" },
     "muse": { "provider": "muse", "model": "muse-wonder-full-1.0", "family": "muse", "effort": "high" }
   }
 }

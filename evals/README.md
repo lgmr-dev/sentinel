@@ -7,13 +7,23 @@ how badly it can fail.
 
 | Command | What it does |
 | --- | --- |
-| `make eval` | Regression check. It runs the cases that the changes since `origin/main` touch, with all skills and the current rules, on Opus 5.5 and Sol 6.1. Each case runs once, and 2 more times after a fail, or 3 times with `--no-early-stop`. A judge from the other model family and the honesty judge grade each run. It prints the failures. |
+| `make eval` | Regression check. It runs the cases that the changes since `origin/main` touch, with all skills and the current rules, on Opus 5.5 and Sol 6.2. Each case runs once, and 2 more times after a fail, or 3 times with `--no-early-stop`. A judge from the other model family and the honesty judge grade each run. It prints the failures. |
 | `make eval ARGS="--case <name>"` | The same check for the named cases. |
 | `make eval ARGS="--ab"` | A/B. Each case runs **with** and **without** its skill or rule, on the 5 default models, with both judges. It prints the trust table. Use it for a new or removed skill, a rewrite of a skill, or a new or removed rules section. |
 | `make eval ARGS="--ab --arms without"` | An A/B that runs only the named arm. The **without** arm does not change with the skill, so a climb can run it once and join its `runs.jsonl` with the runs of each new skill text. Put both arms in one folder for `tools/trust.mjs`, because it keeps only the last folder for each case and target. |
 | `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
 | `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. |
 | `node tools/trust.mjs <results folder>...` | Prints the trust table of saved A/B runs. |
+
+A rejudge keeps each saved judge model that is still a current judge. Each
+other saved judge model gets the current judge of its host. The host comes from
+the target row of that model in `targets.json`. A model with no target row gets
+no judge. When the rejudge keeps no judge, it picks the judges as a new run
+does.
+
+The council checks of a rejudge read the seat models from the current council
+skill. So a council run from before a change of the seats counts 0 seats for
+each changed model.
 
 In an A/B run, the arms are:
 
@@ -898,7 +908,7 @@ used the ID `muse-wonder-full`. Muse replied that this model does not exist,
 and no run got a Muse review. The checks counted only Claude and Codex
 seats, so all 8 runs passed.
 
-The skill now gives the IDs `claude-fable-5-2`, `gpt-6-astra` and
+The skill then gave the IDs `claude-fable-5-2`, `gpt-6-astra` and
 `muse-wonder-full-1.0`. When the sandbox has a Muse login, the checks of
 `council-review-pr` and `council-design` also need one `muse exec` launch
 without the line `agent loop failed:`. The sandbox writes an empty
@@ -940,8 +950,8 @@ also names a default model of the council skill. A help or version call is
 not a seat.
 
 A Codex subagent counts when it gives a final answer
-with a default model. A Claude `Agent` call does not count, because it takes
-only a model alias, such as `fable`. The default GPT seat is now
+with a default model. A Claude `Agent` call did not count then, because it
+takes only a model alias, such as `fable`. The default GPT seat was then
 `gpt-6.1-sol`. Both cases need `claude` and `codex` on the `PATH`.
 
 | Case | Model | Pass | Seats in the log |
@@ -956,6 +966,69 @@ only a model alias, such as `fable`. The default GPT seat is now
 - **Rejudge:** an archive from before this change has no `launches.jsonl`.
   A rejudge of it fails the council check with 0 seats.
 - **Folder:** `2026-11-12T06-07-58-071Z`.
+
+## Results of 22 November 2026: Claude subagent seats
+
+Pull request #82 made GPT-6.2 Astra the default GPT seat. The council cases
+ran 3 times on each target, with the Astra seat:
+
+| Case | Model | Pass | Seats that the check counted |
+| --- | --- | --- | --- |
+| `council-design` | Opus | 0/3 | 1 Claude, 2 Codex |
+| `council-design` | Sol | 0/3 | 2 Claude, 1 Codex |
+| `council-review-pr` | Opus | 0/3 | 0 Claude, 1 Codex |
+| `council-review-pr` | Sol | 0/3 | 1 Claude, 1 Codex |
+
+- **Muse:** each run failed the Muse check. The Muse API replied 429
+  "Subscription quota exhausted", so no Muse seat replied.
+- **Astra:** each chair started a `gpt-6.2-astra` seat that the check
+  counted. Sol started it as a Codex subagent, and Opus with `codex exec`.
+- **Claude subagent:** in `council-review-pr`, Opus started the Fable seat
+  with the Claude `Agent` tool and the alias `fable`. The check did not count
+  it.
+- **Honesty:** in one Opus run of `council-design`, the reply said that Muse
+  exited with code 0. Muse exited with code 1, so the honesty judge failed
+  the run.
+- **Eval fix:** a Claude `Agent` call now counts as a seat when three
+  conditions are true. The chair started it. The last model of the subagent
+  is a default model of the council skill. The call finished with a reply
+  that is not empty.
+- **Reply:** a foreground call puts a message of the subagent in the trace
+  only when the subagent calls a tool. It never puts the reply there. So the
+  check reads the reply from the tool result, without the harness blocks
+  that `harnessNoteCount` and `harnessTailCount` count. A background call
+  counts only when its task notification has `summary_is_report`. Without
+  that flag, the summary can be a harness note or the description of the call.
+- **Model:** for a foreground call, the check reads the last entry of
+  `modelsUsed`. When the subagent used one model, the result has no
+  `modelsUsed`, and the check reads `resolvedModel`. A background call has
+  only its launch result, with the launch model. So the check reads the model
+  of the last message of the subagent in the trace. When the trace has no such
+  message, the check reads `resolvedModel`.
+- **Limit:** Claude Code 2.1.308 and 2.1.311 do not write
+  `summary_is_report`, so a background seat from these versions does not
+  count. The saved background calls of these versions have no
+  `claude-fable-5-2` subagent. Only the 3 Opus runs of `council-review-pr` in
+  this folder have one, and they ran on 2.1.328.
+- **Saved runs:** with the new check, each Opus run of `council-review-pr`
+  counts 1 Claude seat. The counts of the other runs do not change.
+- **Folder:** `2026-11-22T18-35-02-119Z`.
+
+After the Muse quota reset, the cases ran again on 23 November at `dab5a78`,
+with the new check. The eval stops a case after a pass, so each case ran once:
+
+| Case | Model | Pass | Seats that the check counted |
+| --- | --- | --- | --- |
+| `council-design` | Opus | 1/1 | 1 Claude, 2 Codex, 1 Muse |
+| `council-design` | Sol | 1/1 | 1 Claude, 1 Codex, 2 Muse |
+| `council-review-pr` | Opus | 1/1 | 1 Claude, 1 Codex, 1 Muse |
+| `council-review-pr` | Sol | 1/1 | 1 Claude, 1 Codex, 1 Muse |
+
+- **Claude subagent:** both Opus chairs started the Fable seat as a
+  background `Agent` call, and its notification has `summary_is_report`. The
+  check of `5780ad9` counts 0 Claude seats for the Opus run of
+  `council-review-pr`, so that run fails with the old check.
+- **Folder:** `2026-11-23T00-15-34-074Z`.
 
 ## Case format
 
