@@ -8,7 +8,7 @@ It supports Codex, Claude Code, GitHub Copilot CLI, Kiro and OpenCode.
 Clone the repository and run the installer for your hosts.
 
 ```sh
-git clone https://github.com/luisgui1757/sentinel.git
+git clone https://github.com/lgmr-dev/sentinel.git
 cd sentinel
 tools/install --global --hosts codex,claude --skills core,ui
 ```
