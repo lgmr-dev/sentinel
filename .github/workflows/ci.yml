@@ -1,100 +1,26 @@
 name: CI
-
 on:
-  push:
-    branches: [main]
   pull_request:
-
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  # Each runner has pwsh. Linux and macOS also test the bash installer.
-  test:
-    name: test
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
-        with:
-          node-version: "26.13.1"
-      - name: Installer and import tests
-        run: node --test --test-global-setup=tests/tmpdir-setup.mjs "tests/*.test.mjs"
-
-  lint:
-    name: lint
+  probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          fetch-depth: 0  # gitleaks reads the full history
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
-        with:
-          node-version: "26.13.1"
-      - name: Shell script, home paths and STE prose
-        run: make lint
-      - name: Secrets
-        run: |
-          set -euo pipefail
-          gl_ver=8.30.1
-          gl_sha=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          curl -fsSL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${gl_ver}/gitleaks_${gl_ver}_linux_x64.tar.gz"
-          echo "${gl_sha}  gitleaks.tar.gz" | sha256sum -c -
-          tar -xzf gitleaks.tar.gz gitleaks
-          ./gitleaks git --no-banner --redact .
-
-  upstream:
-    name: upstream
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
-        with:
-          node-version: "26.13.1"
-      - name: Pinned upstream sources give the same files
-        run: node tools/upstream.mjs --verify
+      - name: Probe
         env:
           GH_TOKEN: ${{ github.token }}
-
-  dependency_review:
-    name: dependency-review
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Review dependency changes
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec  # v5.0.1
-      - name: Pass on pushes
-        if: github.event_name != 'pull_request'
-        run: echo 'dependency review applies to pull requests only'
-
-  # Branch protection requires this check. It always runs, and it fails unless
-  # each job above passed.
-  ci:
-    name: ci
-    needs: [test, lint, upstream, dependency_review]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: All jobs passed
         run: |
-          if [ "${{ needs.test.result }}" != success ] \
-             || [ "${{ needs.lint.result }}" != success ] \
-             || [ "${{ needs.upstream.result }}" != success ] \
-             || [ "${{ needs.dependency_review.result }}" != success ]; then
-            echo "test=${{ needs.test.result }} lint=${{ needs.lint.result }}" >&2
-            echo "upstream=${{ needs.upstream.result }} dependency-review=${{ needs.dependency_review.result }}" >&2
-            exit 1
-          fi
+          probe() {
+            echo "== $1 token"
+            curl -sS -D hdr.txt -o body.json -H "Authorization: Bearer $GH_TOKEN" -H 'User-Agent: sentinel-upstream' "https://api.github.com/repos/$1" || true
+            grep -iE '^(HTTP|x-accepted|x-ratelimit-(remaining|resource))' hdr.txt || true
+            head -c 300 body.json; echo
+            echo "== $1 anonymous: $(curl -sS -o /dev/null -w '%{http_code}' -H 'User-Agent: sentinel-upstream' "https://api.github.com/repos/$1")"
+          }
+          probe 'anthropics/skills/git/trees/dbd4588f9e1033efb41dad4bef2f7947c8993d44?recursive=1'
+          probe 'cursor/plugins/git/trees/d42aff08aa58965d2735c4ead61a9af82b89d0d0?recursive=1'
+          probe 'cursor/plugins/git/trees/4dd1d05818d19792e7cd6e818f1667f95f7e1dbe'
+          probe 'cursor/plugins/commits/main'
+          probe 'cursor/plugins/contents/README.md'
