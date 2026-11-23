@@ -94,8 +94,16 @@ export async function run({ root, mode, fetchImpl = fetch }) {
       const headers = { 'User-Agent': 'sentinel-upstream' };
       if (url.startsWith('https://api.github.com/') && process.env.GH_TOKEN) headers.Authorization = `Bearer ${process.env.GH_TOKEN}`;
       if (/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/(git\/blobs|contents)\//.test(url)) headers.Accept = 'application/vnd.github.raw+json';
-      const response = await fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(60000), headers });
-      if (!response.ok) fail(`Upstream request failed (${response.status}): ${url}`);
+      const request = () => fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(60000), headers });
+      let response = await request();
+      let refusal = response.ok ? '' : await response.text();
+      // https://docs.github.com/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/managing-allowed-ip-addresses-for-your-organization
+      if (response.status === 403 && headers.Authorization && refusal.includes('IP allow list')) {
+        delete headers.Authorization;
+        response = await request();
+        refusal = response.ok ? '' : await response.text();
+      }
+      if (!response.ok) fail(`Upstream request failed (${response.status}): ${url} ${refusal.slice(0, 300)}`.trimEnd());
       const chunks = []; let size = 0;
       for await (const chunk of response.body) {
         size += chunk.length; total += chunk.length;
