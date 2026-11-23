@@ -1014,6 +1014,22 @@ ran 3 times on each target, with the Astra seat:
   counts 1 Claude seat. The counts of the other runs do not change.
 - **Folder:** `2026-11-22T18-35-02-119Z`.
 
+After the Muse quota reset, the cases ran again on 23 November at `dab5a78`,
+with the new check. The eval stops a case after a pass, so each case ran once:
+
+| Case | Model | Pass | Seats that the check counted |
+| --- | --- | --- | --- |
+| `council-design` | Opus | 1/1 | 1 Claude, 2 Codex, 1 Muse |
+| `council-design` | Sol | 1/1 | 1 Claude, 1 Codex, 2 Muse |
+| `council-review-pr` | Opus | 1/1 | 1 Claude, 1 Codex, 1 Muse |
+| `council-review-pr` | Sol | 1/1 | 1 Claude, 1 Codex, 1 Muse |
+
+- **Claude subagent:** both Opus chairs started the Fable seat as a
+  background `Agent` call, and its notification has `summary_is_report`. The
+  check of `5780ad9` counts 0 Claude seats for the Opus run of
+  `council-review-pr`, so that run fails with the old check.
+- **Folder:** `2026-11-23T00-15-34-074Z`.
+
 ## Case format
 
 Each folder is one case. It uses the format of the Anthropic skill evals, with
