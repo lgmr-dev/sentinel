@@ -51,25 +51,25 @@ async function evalCheck(name, check, { launches = [], wait = false, sessions = 
 }
 
 const fable = { cli: 'claude', args: ['-p', '--model', 'claude-fable-5-2', '--effort', 'medium'], code: 0, bytes: 900 };
-const astraSeat = { parent: 'chair', phase: 'final_answer', model: 'gpt-6.2-astra' };
+const solSeat = { parent: 'chair', phase: 'final_answer' };
 
-test('the council check counts a Claude seat and an Astra seat that ran the default model and replied', async () => {
+test('the council check counts a Claude seat and a Sol seat that ran the default model and replied', async () => {
   const seats = options => evalCheck('council-design', 'asks at least two other models', options);
-  assert.equal(await seats({ launches: [fable], sessions: [astraSeat] }), true);
-  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 0, bytes: 900 }] }), true);
-  assert.equal(await seats({ launches: [{ ...fable, code: 1 }], sessions: [astraSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, bytes: 0 }], sessions: [astraSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, args: ['-p', '--model', 'claude-opus-5-5'] }], sessions: [astraSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '--help'] }], sessions: [astraSeat] }), false);
-  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '-v'] }], sessions: [astraSeat] }), false);
-  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-astra', '-'], code: 1, bytes: 0 }] }), false);
-  assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, model: 'gpt-6-luna' }] }), false);
-  assert.equal(await seats({ launches: [fable], sessions: [{ ...astraSeat, phase: 'commentary' }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [solSeat] }), true);
+  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-sol', '-'], code: 0, bytes: 900 }] }), true);
+  assert.equal(await seats({ launches: [{ ...fable, code: 1 }], sessions: [solSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, bytes: 0 }], sessions: [solSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, args: ['-p', '--model', 'claude-opus-5-5'] }], sessions: [solSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '--help'] }], sessions: [solSeat] }), false);
+  assert.equal(await seats({ launches: [{ ...fable, args: [...fable.args, '-v'] }], sessions: [solSeat] }), false);
+  assert.equal(await seats({ launches: [fable, { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-sol', '-'], code: 1, bytes: 0 }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [{ ...solSeat, model: 'gpt-6.2-astra' }] }), false);
+  assert.equal(await seats({ launches: [fable], sessions: [{ ...solSeat, phase: 'commentary' }] }), false);
   assert.equal(await seats({ launches: [fable], wait: true }), false);
 });
 
 test('the council check counts a Claude Code subagent that ran the Fable model and replied', async () => {
-  const seats = options => evalCheck('council-design', 'asks at least two other models', { sessions: [astraSeat], ...options });
+  const seats = options => evalCheck('council-design', 'asks at least two other models', { sessions: [solSeat], ...options });
   const call = { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'seat', name: 'Agent', input: { model: 'fable' } }] } };
   const prompt = { type: 'user', message: { role: 'user', content: 'Review the plan' } };
   const text = texts => texts.map(t => ({ type: 'text', text: t }));
@@ -101,7 +101,7 @@ test('the council check counts a Claude Code subagent that ran the Fable model a
 test('the council checks need a Muse seat that replied, when the sandbox has a Muse login', async () => {
   const muse = { cli: 'muse', args: ['exec', '--model', 'muse-wonder-full-1.0', 'Review'], code: 0, bytes: 900 };
   for (const [name, check] of [['council-design', 'asks the Muse seat'], ['council-review-pr', 'starts the Muse seat']]) {
-    const seat = options => evalCheck(name, check, { sessions: [astraSeat], ...options });
+    const seat = options => evalCheck(name, check, { sessions: [solSeat], ...options });
     assert.equal(await seat({ launches: [fable, muse], muse: true }), true);
     assert.equal(await seat({ launches: [fable, { ...muse, code: 1 }], muse: true }), false);
     assert.equal(await seat({ launches: [fable], muse: true }), false);
