@@ -219,9 +219,11 @@ test('the UTF-16 check ignores a fixed-string grep preference', { skip }, (t) =>
 test('pre-push accepts a clean push from a shallow clone', { skip }, (t) => {
   const { repo, run } = setup(t);
   assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'second']).status, 0);
-  assert.equal(run(['push', '-q', 'origin', 'main']).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/topic']).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'third']).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/topic']).status, 0);
   const shallow = path.join(repo, '..', 'shallow');
-  assert.equal(run(['clone', '-q', '--depth', '1', `file://${path.join(repo, '..', 'remote.git')}`, shallow], { cwd: path.dirname(repo) }).status, 0);
+  assert.equal(run(['clone', '-q', '--depth', '1', '--branch', 'topic', `file://${path.join(repo, '..', 'remote.git')}`, shallow], { cwd: path.dirname(repo) }).status, 0);
   fs.cpSync(path.join(repo, 'tools'), path.join(shallow, 'tools'), { recursive: true });
   run(['config', 'core.hooksPath', 'tools/hooks'], { cwd: shallow });
   assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'feature'], { cwd: shallow }).status, 0);
