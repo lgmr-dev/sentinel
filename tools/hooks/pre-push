@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+zero=0000000000000000000000000000000000000000
+remote_refs="$(git ls-remote "$2" 'refs/heads/*' 'refs/tags/*' | cut -f1)"
+remote_main="$(git ls-remote "$2" refs/heads/main | cut -f1)"
+public_roots=""
+if [[ -n "$remote_main" ]]; then
+  if ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
+    echo "pre-push: fetch the main branch of the remote first" >&2
+    exit 1
+  fi
+  public_roots="$(git rev-list --max-parents=0 "$remote_main")"
+fi
+published=()
+for sha in $remote_refs; do
+  if git cat-file -e "$sha^{commit}" 2>/dev/null; then
+    published+=("$sha")
+  fi
+done
+while read -r _ local_sha _ _; do
+  [[ "$local_sha" == "$zero" ]] && continue
+  if [[ "$(git cat-file -t "$local_sha^{}")" != commit ]]; then
+    echo "pre-push: ${local_sha:0:12} is not a commit" >&2
+    exit 1
+  fi
+  if [[ -n "$public_roots" ]]; then
+    roots="$(git rev-list --max-parents=0 "$local_sha")"
+    for root in $roots; do
+      if ! grep -qx "$root" <<<"$public_roots"; then
+        echo "pre-push: ${local_sha:0:12} does not start at the root commit of the remote main" >&2
+        exit 1
+      fi
+    done
+  fi
+  tools/privacy.sh tag "$local_sha"
+  tools/privacy.sh commits "$local_sha" --not ${published[@]+"${published[@]}"}
+done
