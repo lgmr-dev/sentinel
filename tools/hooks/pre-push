@@ -23,7 +23,7 @@ while read -r line; do
   fi
 done <<<"$found"
 public_roots=""
-if [[ -n "$remote_main" ]]; then
+if [[ -n "$remote_main" && "$(git rev-parse --is-shallow-repository)" != true ]]; then
   public_roots="$(git rev-list --max-parents=0 "$remote_main")"
 fi
 while read -r _ local_sha remote_ref _; do

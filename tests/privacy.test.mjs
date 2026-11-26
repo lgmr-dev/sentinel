@@ -208,6 +208,26 @@ test('pre-push accepts a branch when the remote main moved on', { skip }, (t) =>
   assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/feature']).status, 0);
 });
 
+test('the UTF-16 check ignores a fixed-string grep preference', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  run(['config', 'grep.patternType', 'fixed']);
+  fs.writeFileSync(path.join(repo, 'u.txt'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`p=${unixPath('home', 'alice', 'x')}\r\n`, 'utf16le')]));
+  run(['add', 'u.txt']);
+  assert.notEqual(run(['commit', '-q', '-m', 'u']).status, 0);
+});
+
+test('pre-push accepts a clean push from a shallow clone', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'second']).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'main']).status, 0);
+  const shallow = path.join(repo, '..', 'shallow');
+  assert.equal(run(['clone', '-q', '--depth', '1', `file://${path.join(repo, '..', 'remote.git')}`, shallow], { cwd: path.dirname(repo) }).status, 0);
+  fs.cpSync(path.join(repo, 'tools'), path.join(shallow, 'tools'), { recursive: true });
+  run(['config', 'core.hooksPath', 'tools/hooks'], { cwd: shallow });
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'feature'], { cwd: shallow }).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/feature'], { cwd: shallow }).status, 0);
+});
+
 test('pre-push checks a renamed annotated tag', { skip }, (t) => {
   const { run } = setup(t);
   assert.equal(run(['tag', '-a', personal, '-m', 'release']).status, 0);

@@ -53,9 +53,9 @@ check_utf16() {
   [[ "$1" == index ]] || prefix="$1:"
   listing="$(mktemp)"
   if [[ "$1" == index ]]; then
-    LC_ALL=C git grep --cached -z -l -a -e $'^\xff\xfe' -e $'^\xfe\xff' > "$listing" || rc=$?
+    LC_ALL=C git grep --cached -z -l -a -G -e $'^\xff\xfe' -e $'^\xfe\xff' > "$listing" || rc=$?
   else
-    LC_ALL=C git grep -z -l -a -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" > "$listing" || rc=$?
+    LC_ALL=C git grep -z -l -a -G -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" > "$listing" || rc=$?
   fi
   if ((rc > 1)); then
     rm -f "$listing"
@@ -94,9 +94,9 @@ check_addresses() {
   text="$(sed -E "s#$ssh_remote##g" <<<"$2")"
   addresses="$(grep -oE "$email" <<<"$text" | grep -viE "$not_address" || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
-  for found in $addresses; do
-    check_address "$name" "$found"
-  done
+  while read -r found; do
+    [[ -z "$found" ]] || check_address "$name" "$found"
+  done < <(sort -u <<<"$addresses")
   return 0
 }
 
