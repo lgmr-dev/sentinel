@@ -10,7 +10,7 @@ regexes = ['''sup_live_Hq7Vd2Lx9Pw4Ka8Zt3Nc6Rb1Mf5Jy''']
 [[rules]]
 id = "home-folder-path"
 description = "A path in a user home folder"
-regex = '''((?i:https?)://(\[[0-9A-Fa-f:.]+\]|[^/\s"',;<>()|`\\{}\[\]]+)[^\s"',;<>()|`\\{}\[\]]*)?([a-zA-Z]:)?(/|\\{1,2})((?i:users)|home|root)(/|\\{1,2})([\p{L}\p{N}._-]|%[0-9A-Fa-f]{2})+'''
+regex = '''((?i:https?)://(\[[0-9A-Fa-f:.]+\]|[^/\s"',;<>()|`\\{}\[\]]+)([^\s"',;<>()|`\\{}\[\]]|\([^\s"',;<>()|`\\{}\[\]]*\))*)?([a-zA-Z]:)?(/|\\{1,2})((?i:users)|home|root)(/|\\{1,2})([\p{L}\p{N}._-]|%[0-9A-Fa-f]{2})+'''
 
 [[rules.allowlists]]
 description = "A web URL with a home-like path"

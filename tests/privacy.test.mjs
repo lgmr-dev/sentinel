@@ -65,6 +65,8 @@ const files = [
   ['a home folder in a WSL share', ['', '', 'wsl$', 'Ubuntu', 'home', 'alice'].join('\\'), false],
   ['an upper-case web URL with a home-like path', 'HTTPS://github.com/o/r/blob/main/root/README', true],
   ['a web URL with an IPv6 host', 'http://[::1]:8080/api/home/settings', true],
+  ['a web URL with parentheses in its path', 'https://github.com/o/r/blob/main/app/(auth)/home/page.tsx', true],
+  ['a home path after a Markdown link', `[d](https://a.example/x)${unixPath('home', 'alice')}`, false],
   ['a web URL with a home-like path', 'https://github.com/o/r/blob/main/portable/root/README', true],
   ['test data with an address', addressOf('a', 'x.io'), true],
   ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
@@ -198,6 +200,19 @@ test('pre-push accepts a signed commit when log.showSignature is on', { skip }, 
   assert.equal(run(['-c', 'log.showSignature=true', 'push', '-q', 'origin', 'HEAD:refs/heads/signed']).status, 0);
 });
 
+test('pre-push accepts a clean push from a stale clone of a published topic branch', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  assert.equal(run(['checkout', '-q', '-b', 'topic']).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'published personal'], { as: personal }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'topic']).status, 0);
+  const other = path.join(repo, '..', 'other');
+  assert.equal(run(['clone', '-q', '--branch', 'topic', path.join(repo, '..', 'remote.git'), other], { cwd: path.dirname(repo) }).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'moved'], { cwd: other }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'topic'], { cwd: other }).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'clean child']).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/child']).status, 0);
+});
+
 test('pre-push accepts a branch when the remote main moved on', { skip }, (t) => {
   const { repo, run } = setup(t);
   const other = path.join(repo, '..', 'other');
@@ -208,9 +223,10 @@ test('pre-push accepts a branch when the remote main moved on', { skip }, (t) =>
   assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/feature']).status, 0);
 });
 
-test('the UTF-16 check ignores a fixed-string grep preference', { skip }, (t) => {
+test('the UTF-16 check ignores grep and color preferences', { skip }, (t) => {
   const { repo, run } = setup(t);
   run(['config', 'grep.patternType', 'fixed']);
+  run(['config', 'color.ui', 'always']);
   fs.writeFileSync(path.join(repo, 'u.txt'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`p=${unixPath('home', 'alice', 'x')}\r\n`, 'utf16le')]));
   run(['add', 'u.txt']);
   assert.notEqual(run(['commit', '-q', '-m', 'u']).status, 0);
@@ -244,7 +260,9 @@ test('pre-commit and pre-push stop a UTF-16 file with private data', { skip }, (
     run(['add', name]);
     assert.notEqual(run(['commit', '-q', '-m', name]).status, 0, name);
     assert.equal(run(['commit', '-q', '--no-verify', '-m', name]).status, 0);
-    assert.notEqual(run(['push', '-q', 'origin', `HEAD:refs/heads/${name}`]).status, 0, name);
+    const push = run(['push', '-q', 'origin', 'HEAD:refs/heads/utf16']);
+    assert.notEqual(push.status, 0, name);
+    assert.match(push.stderr, /UTF-16 file/, name);
     run(['reset', '-q', '--hard', 'origin/main']);
   }
 });

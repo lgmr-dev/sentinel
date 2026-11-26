@@ -3,7 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export GIT_NO_REPLACE_OBJECTS=1
 
-home='([Hh][Tt][Tt][Pp][Ss]?://(\[[0-9A-Fa-f:.]+\]|[^]/[:space:]"'"'"',;<>()|`\\{}[]+)[^][:space:]"'"'"',;<>()|`\\{}[]*)?([A-Za-z]:)?(/|\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\{1,2})([[:alnum:]._-]|%[0-9A-Fa-f]{2}|[^[:print:][:cntrl:]])+'
+url_char='[^][:space:]"'"'"',;<>()|`\\{}]'
+url_host='(\[[0-9A-Fa-f:.]+\]|[^]/[:space:]"'"'"',;<>()|`\\{}[]+)'
+home="([Hh][Tt][Tt][Pp][Ss]?://$url_host($url_char|\\($url_char*\\))*)?([A-Za-z]:)?(/|\\\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\\\{1,2})([[:alnum:]._-]|%[0-9A-Fa-f]{2}|[^[:print:][:cntrl:]])+"
 web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
@@ -23,7 +25,7 @@ real_homes() {
 }
 
 grep_tree() {
-  local rc=0 flags=(-a -h -o -E)
+  local rc=0 flags=(--no-color -a -h -o -E)
   [[ "${3:-}" == any-case ]] && flags+=(-i)
   if [[ "$1" == index ]]; then
     git grep --cached "${flags[@]}" -e "$2" || rc=$?
@@ -53,9 +55,9 @@ check_utf16() {
   [[ "$1" == index ]] || prefix="$1:"
   listing="$(mktemp)"
   if [[ "$1" == index ]]; then
-    LC_ALL=C git grep --cached -z -l -a -G -e $'^\xff\xfe' -e $'^\xfe\xff' > "$listing" || rc=$?
+    LC_ALL=C git grep --no-color --cached -z -l -a -G -e $'^\xff\xfe' -e $'^\xfe\xff' > "$listing" || rc=$?
   else
-    LC_ALL=C git grep -z -l -a -G -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" > "$listing" || rc=$?
+    LC_ALL=C git grep --no-color -z -l -a -G -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" > "$listing" || rc=$?
   fi
   if ((rc > 1)); then
     rm -f "$listing"
