@@ -165,6 +165,18 @@ test('pre-push checks a renamed annotated tag', { skip }, (t) => {
   assert.notEqual(run(['push', '-q', 'origin', 'clean']).status, 0);
 });
 
+test('pre-commit and pre-push stop a UTF-16 file with private data', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  for (const [name, text] of [['home.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`], ['mail.txt', `contact ${mailbox}\r\n`]]) {
+    fs.writeFileSync(path.join(repo, name), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]));
+    run(['add', name]);
+    assert.notEqual(run(['commit', '-q', '-m', name]).status, 0, name);
+    assert.equal(run(['commit', '-q', '--no-verify', '-m', name]).status, 0);
+    assert.notEqual(run(['push', '-q', 'origin', `HEAD:refs/heads/${name}`]).status, 0, name);
+    run(['reset', '-q', '--hard', 'origin/main']);
+  }
+});
+
 test('pre-commit stops a top-level home folder in a name with a tab', { skip }, (t) => {
   const { run, write } = setup(t);
   write(['home', 'alice\tx', 'f'].join('/'), 'x\n');

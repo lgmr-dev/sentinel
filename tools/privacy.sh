@@ -44,6 +44,28 @@ check_files() {
   [[ -z "$found" ]] || fail "$2: a file holds a home folder path; list them with $list"
   found="$(grep_tree "$1" "$personal_mail" any-case)"
   [[ -z "$found" ]] || fail "$2: a file holds a personal email address; list them with $mail"
+  check_utf16 "$1" "$2"
+}
+
+check_utf16() {
+  local rc=0 paths path text prefix=":"
+  [[ "$1" == index ]] || prefix="$1:"
+  if [[ "$1" == index ]]; then
+    paths="$(LC_ALL=C git grep --cached -l -a -e $'^\xff\xfe' -e $'^\xfe\xff')" || rc=$?
+  else
+    paths="$(LC_ALL=C git grep -l -a -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" | sed "s#^$1:##")" || rc=$?
+  fi
+  if ((rc > 1)); then
+    echo "privacy: git grep failed" >&2
+    exit 2
+  fi
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    text="$(git cat-file blob "$prefix$path" | iconv -f UTF-16 -t UTF-8 2>/dev/null || true)"
+    if [[ -n "$(real_homes <<<"$text")" || -n "$(grep -oiE "$personal_mail" <<<"$text" || true)" ]]; then
+      fail "$2: the UTF-16 file $path holds a home folder path or a personal email address"
+    fi
+  done <<<"$paths"
 }
 
 check_links() {
