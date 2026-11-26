@@ -64,6 +64,7 @@ const files = [
   ['an upper-case web URL with a home-like path', 'HTTPS://github.com/o/r/blob/main/root/README', true],
   ['a web URL with a home-like path', 'https://github.com/o/r/blob/main/portable/root/README', true],
   ['test data with an address', addressOf('a', 'x.io'), true],
+  ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
 ];
 for (const [name, text, passes] of files) {
   test(`pre-commit ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {
@@ -129,6 +130,10 @@ const pushes = [
   ['a personal address after an SSH remote and a comma', { message: `See ${addressOf('git', 'github.com')}:o/r.git,${personal}` }, false],
   ['a generic type in a trailer', { message: 'x\n\nCaused-by: List<String> change' }, true],
   ['a GitHub web-flow committer', { committer: addressOf('web-flow', 'github.com') }, true],
+  ['a personal address that ends in -git before a colon', { message: `Ask ${addressOf('team-git', 'corp-mail.net')}: now` }, false],
+  ['two angle values in a sign-off', { message: `x\n\nSigned-off-by: A <${addressOf('alice', 'myhost')}> <${noreply}>` }, false],
+  ['a subdomain of a reserved example domain', { message: `Mail ${addressOf('a', 'mail.example.com')}` }, true],
+  ['a pre-release package version', { message: 'bump pkg@v1.0.0-rc.alpha and @scope/pkg@1.0.0-canary.abc' }, true],
   ['a branch name with a users folder', { ref: ['refs', 'heads', 'feat', 'users', 'login'].join('/') }, true],
   ['an upper-case noreply domain', { as: addressOf('1+a', 'USERS.NOREPLY.GITHUB.COM') }, true],
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
@@ -142,6 +147,29 @@ for (const [name, { message = 'x', ref = 'refs/heads/feature', ...who }, passes]
     assert.equal(run(['push', '-q', 'origin', `HEAD:${ref}`]).status === 0, passes);
   });
 }
+
+test('the printed list command runs and names the file', { skip }, (t) => {
+  const { repo, write } = setup(t);
+  write('f.txt', `${unixPath('home', 'alice')}\n`);
+  const check = spawnSync('bash', ['tools/privacy.sh', 'index'], { cwd: repo, encoding: 'utf8' });
+  const command = check.stderr.split('list them with ')[1].split('\n')[0];
+  const listed = spawnSync('bash', ['-c', command], { cwd: repo, encoding: 'utf8' });
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^f\.txt:1:/);
+});
+
+test('pre-push checks a renamed annotated tag', { skip }, (t) => {
+  const { run } = setup(t);
+  assert.equal(run(['tag', '-a', personal, '-m', 'release']).status, 0);
+  assert.equal(run(['tag', 'clean', personal]).status, 0);
+  assert.notEqual(run(['push', '-q', 'origin', 'clean']).status, 0);
+});
+
+test('pre-commit stops a top-level home folder in a name with a tab', { skip }, (t) => {
+  const { run, write } = setup(t);
+  write(['home', 'alice\tx', 'f'].join('/'), 'x\n');
+  assert.notEqual(run(['commit', '-q', '-m', 'names']).status, 0);
+});
 
 test('pre-push checks tags and the root commit', { skip }, (t) => {
   const { run } = setup(t);
