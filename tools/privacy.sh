@@ -3,13 +3,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export GIT_NO_REPLACE_OBJECTS=1
 
-home='([Hh][Tt][Tt][Pp][Ss]?://[^]/[:space:]"'"'"',;<>()|`\\{}[]+[^][:space:]"'"'"',;<>()|`\\{}[]*)?([A-Za-z]:)?(/|\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\{1,2})([[:alnum:]._-]|[^[:print:][:cntrl:]])+'
+home='([Hh][Tt][Tt][Pp][Ss]?://[^]/[:space:]"'"'"',;<>()|`\\{}[]+[^][:space:]"'"'"',;<>()|`\\{}[]*)?([A-Za-z]:)?(/|\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\{1,2})([[:alnum:]._-]|%[0-9A-Fa-f]{2}|[^[:print:][:cntrl:]])+'
 web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
 ssh_remote='(^|[^A-Za-z0-9._%+-])git@[A-Za-z0-9.-]+(:|/)[A-Za-z0-9._~/-]+'
 personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota|tuta)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
 public_address='^([^@[:space:]]+@users\.noreply\.github\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@([a-z0-9-]+\.)*example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
+not_address='@(v?[0-9]+\.[0-9]|[0-9]+x\.|[A-Za-z0-9_.-]+\.(service|socket|timer|target|mount|path|slice|scope|device|swap|automount)$)'
 status=0
 
 fail() {
@@ -48,29 +49,37 @@ check_files() {
 }
 
 check_utf16() {
-  local rc=0 paths path text prefix=":"
+  local rc=0 path text bom prefix=":" listing
   [[ "$1" == index ]] || prefix="$1:"
+  listing="$(mktemp)"
   if [[ "$1" == index ]]; then
-    paths="$(LC_ALL=C git grep --cached -l -a -e $'^\xff\xfe' -e $'^\xfe\xff')" || rc=$?
+    LC_ALL=C git grep --cached -z -l -a -e $'^\xff\xfe' -e $'^\xfe\xff' > "$listing" || rc=$?
   else
-    paths="$(LC_ALL=C git grep -l -a -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" | sed "s#^$1:##")" || rc=$?
+    LC_ALL=C git grep -z -l -a -e $'^\xff\xfe' -e $'^\xfe\xff' "$1" > "$listing" || rc=$?
   fi
   if ((rc > 1)); then
+    rm -f "$listing"
     echo "privacy: git grep failed" >&2
     exit 2
   fi
-  while IFS= read -r path; do
-    [[ -n "$path" ]] || continue
-    text="$(git cat-file blob "$prefix$path" | iconv -f UTF-16 -t UTF-8 2>/dev/null || true)"
+  while IFS= read -r -d '' path; do
+    path="${path#"$1":}"
+    bom="$(git cat-file blob "$prefix$path" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
+    [[ "$bom" == fffe || "$bom" == feff ]] || continue
+    if ! text="$(git cat-file blob "$prefix$path" | iconv -f UTF-16 -t UTF-8)"; then
+      fail "$2: the UTF-16 file $path cannot be read"
+      continue
+    fi
     if [[ -n "$(real_homes <<<"$text")" || -n "$(grep -oiE "$personal_mail" <<<"$text" || true)" ]]; then
       fail "$2: the UTF-16 file $path holds a home folder path or a personal email address"
     fi
-  done <<<"$paths"
+  done < "$listing"
+  rm -f "$listing"
 }
 
 check_links() {
   if [[ -n "$1" ]]; then
-    fail "$2: remove the $(wc -l <<<"$1" | tr -d ' ') symbolic links; list them with git ls-tree -r $3 | grep ^120000"
+    fail "$2: remove the $(wc -l <<<"$1" | tr -d ' ') symbolic links; list them with $3 | grep ^120000"
   fi
 }
 
@@ -83,7 +92,7 @@ check_address() {
 check_addresses() {
   local name="$1" text addresses found
   text="$(sed -E "s#$ssh_remote##g" <<<"$2")"
-  addresses="$(grep -oE "$email" <<<"$text" | grep -vE '@v?[0-9]+\.[0-9]' || true)"
+  addresses="$(grep -oE "$email" <<<"$text" | grep -vE "$not_address" || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
   for found in $addresses; do
     check_address "$name" "$found"
@@ -108,9 +117,9 @@ check_text() {
 }
 
 check_commit() {
-  local commit="$1" short="${1:0:12}" links names
+  local commit="$1" short="${1:0:12}" links names mergetag
   links="$(git ls-tree -r "$commit" | awk '$1 == "120000" {print $4}')"
-  check_links "$links" "commit $short" "$short"
+  check_links "$links" "commit $short" "git ls-tree -r $short"
   check_files "$commit" "commit $short"
   names="$(git ls-tree -r -z --name-only "$commit" | tr '\0' '\n')"
   check_names "$names" "commit $short"
@@ -118,12 +127,17 @@ check_commit() {
   check_address "commit $short committer" "$(git log -1 --format=%ce "$commit")"
   check_text "commit $short identity names" "$(git log -1 --format='%an%n%cn' "$commit")"
   check_text "commit $short message" "$(git log -1 --format=%B "$commit")"
+  mergetag="$(git cat-file commit "$commit" | sed -n '/^$/q; /^mergetag /,/^[^ ]/{ /^mergetag /s/^mergetag //p; /^ /s/^ //p; }')"
+  if [[ -n "$mergetag" ]]; then
+    check_address "commit $short merged tag tagger" "$(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$mergetag")"
+    check_text "commit $short merged tag" "$mergetag"
+  fi
 }
 
 case "${1:-index}" in
   index)
     links="$(git ls-files --stage | awk '$1 == "120000" {print $4}')"
-    check_links "$links" index HEAD
+    check_links "$links" index "git ls-files --stage"
     check_files index index
     names="$(git ls-files -z | tr '\0' '\n')"
     check_names "$names" index

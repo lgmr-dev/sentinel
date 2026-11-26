@@ -58,6 +58,8 @@ const files = [
   ['a home path after a URL in minified JSON', `{"u":"https://a.example/x","p":"${unixPath('home', 'alice', '.ssh')}"}`, false],
   ['a home path after a URL and a comma', `https://a.example/x,${unixPath('home', 'alice')}`, false],
   ['a file URL with a host', `file://localhost${unixPath('home', 'alice', 'x')}`, false],
+  ['a file URL with an encoded name', `file://${unixPath('home', '%C3%A9lise', 'x')}`, false],
+  ['a printf format after a home folder', `printf '${unixPath('home', '%s')}'`, true],
   ['a Windows home path without a drive', ['', 'Users', 'alice', 'secret'].join('\\'), false],
   ['a home path after a URL in a table', `|https://a.example/x|${unixPath('home', 'alice', 'k')}|`, false],
   ['a home folder in a WSL share', ['', '', 'wsl$', 'Ubuntu', 'home', 'alice'].join('\\'), false],
@@ -134,6 +136,7 @@ const pushes = [
   ['two angle values in a sign-off', { message: `x\n\nSigned-off-by: A <${addressOf('alice', 'myhost')}> <${noreply}>` }, false],
   ['a subdomain of a reserved example domain', { message: `Mail ${addressOf('a', 'mail.example.com')}` }, true],
   ['a pre-release package version', { message: 'bump pkg@v1.0.0-rc.alpha and @scope/pkg@1.0.0-canary.abc' }, true],
+  ['an image size and a systemd unit', { message: 'Add logo@2x.png and enable wg-quick@wg0.service' }, true],
   ['a branch name with a users folder', { ref: ['refs', 'heads', 'feat', 'users', 'login'].join('/') }, true],
   ['an upper-case noreply domain', { as: addressOf('1+a', 'USERS.NOREPLY.GITHUB.COM') }, true],
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
@@ -158,6 +161,28 @@ test('the printed list command runs and names the file', { skip }, (t) => {
   assert.match(listed.stdout, /^f\.txt:1:/);
 });
 
+test('the printed link command lists a staged link', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  fs.symlinkSync('target', path.join(repo, 'link'));
+  run(['add', 'link']);
+  const check = spawnSync('bash', ['tools/privacy.sh', 'index'], { cwd: repo, encoding: 'utf8' });
+  const command = check.stderr.split('list them with ')[1].split('\n')[0];
+  assert.match(spawnSync('bash', ['-c', command], { cwd: repo, encoding: 'utf8' }).stdout, /\tlink$/m);
+});
+
+test('pre-push checks the tagger of a merged signed tag', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  const key = path.join(repo, '..', 'key');
+  assert.equal(spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key]).status, 0);
+  const signing = ['-c', 'gpg.format=ssh', '-c', `user.signingkey=${key}`];
+  run(['checkout', '-q', '-b', 'side']);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'side']).status, 0);
+  assert.equal(run([...signing, 'tag', '-s', 'signed', '-m', 'signed'], { committer: personal }).status, 0);
+  run(['checkout', '-q', 'main']);
+  assert.equal(run(['merge', '-q', '--no-ff', '--no-edit', 'signed']).status, 0);
+  assert.notEqual(run(['push', '-q', 'origin', 'HEAD:refs/heads/merged']).status, 0);
+});
+
 test('pre-push checks a renamed annotated tag', { skip }, (t) => {
   const { run } = setup(t);
   assert.equal(run(['tag', '-a', personal, '-m', 'release']).status, 0);
@@ -167,7 +192,7 @@ test('pre-push checks a renamed annotated tag', { skip }, (t) => {
 
 test('pre-commit and pre-push stop a UTF-16 file with private data', { skip }, (t) => {
   const { repo, run } = setup(t);
-  for (const [name, text] of [['home.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`], ['mail.txt', `contact ${mailbox}\r\n`]]) {
+  for (const [name, text] of [['home.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`], ['mail.txt', `contact ${mailbox}\r\n`], ['größe.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`]]) {
     fs.writeFileSync(path.join(repo, name), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]));
     run(['add', name]);
     assert.notEqual(run(['commit', '-q', '-m', name]).status, 0, name);
