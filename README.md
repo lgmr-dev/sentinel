@@ -246,13 +246,13 @@ repository and run the installer again.
   file or folder in the temporary directory.
 - `make lint` checks the shell scripts, the privacy of the files and the STE
   prose.
-- `make hooks` turns on the Git hooks of `tools/hooks` in your clone. Run it
-  once in each new clone. Git then ignores the hooks in `.git/hooks` of that
-  clone. Before a commit, `tools/privacy.sh` checks the files. It stops on a
-  home folder path, a symbolic link or the address of a personal mailbox. Before a
-  push, it also stops on a personal address in an author, committer, trailer,
-  tag or branch name, in the commits that the remote does not have. CI runs
-  the same check on the commits of each pull request.
+- Run `make hooks` once in each new clone to turn on the Git hooks of
+  `tools/hooks`. Git then ignores the hooks in `.git/hooks` of that clone.
+  Before a commit, `tools/privacy.sh` stops on a home folder path, a symbolic
+  link or the address of a personal mailbox in a file. Before a push, it checks
+  only the commits that the remote does not have. It stops on a personal
+  address in an author, committer, trailer, tag or branch name. CI runs the
+  same check on the commits of each pull request.
 - `make check` compares the imported files with `upstream/lock.json`.
 - `make eval` runs the eval cases that your changes touch, on Opus and Sol,
   with Claude Code and Codex, in a new temporary home folder with a fresh
