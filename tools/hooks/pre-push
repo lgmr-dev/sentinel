@@ -40,7 +40,12 @@ while read -r _ local_sha remote_ref _; do
     done
   fi
   tools/privacy.sh tag "$local_sha"
-  if ! tools/privacy.sh commits "$local_sha" --not ${published[@]+"${published[@]}"}; then
+  if ! {
+    echo "$local_sha"
+    for sha in ${published[@]+"${published[@]}"}; do
+      echo "^$sha"
+    done
+  } | tools/privacy.sh commits --stdin; then
     if ((missing > 0)); then
       echo "pre-push: the remote has $missing refs that this clone lacks; run git fetch, then push again" >&2
     fi

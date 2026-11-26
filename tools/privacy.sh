@@ -2,12 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-home='([A-Za-z][A-Za-z0-9+.-]*://[^/[:space:]]+[^[:space:]]*)?(/Users/|/home/|/root/|[A-Za-z]:\\{1,2}Users\\{1,2})[[:alnum:]._-]+'
-web_url='^[A-Za-z][A-Za-z0-9+.-]*://[^/]'
+home='(https?://[^/[:space:]"'"'"',;<>()\\]+[^[:space:]"'"'"',;<>()\\]*)?(/[Uu][Ss][Ee][Rr][Ss]/|/home/|/root/|([A-Za-z]:)?\\{1,2}[Uu][Ss][Ee][Rr][Ss]\\{1,2})([[:alnum:]._-]|[^[:print:][:cntrl:]])+'
+web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
+ssh_remote='git@[A-Za-z0-9.-]+:[^[:space:]]*'
 personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
-public_address='^([^@[:space:]]+@users\.noreply\.github\.com|git@[A-Za-z0-9.-]+|(noreply|support)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@example\.(com|net|org)|[^@[:space:]]+@([A-Za-z0-9-]+\.)*(example|invalid|test|localhost))$'
+public_address='^([^@[:space:]]+@users\.noreply\.github\.com|(noreply|support)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
 status=0
 
 fail() {
@@ -16,15 +17,16 @@ fail() {
 }
 
 real_homes() {
-  grep -oiE "$home" | grep -viE "$web_url" | sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
+  grep -oE "$home" | grep -viE "$web_url" | sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
 }
 
 grep_tree() {
-  local rc=0
+  local rc=0 flags=(-a -h -o -E)
+  [[ "${3:-}" == any-case ]] && flags+=(-i)
   if [[ "$1" == index ]]; then
-    git grep --cached -a -h -o -i -E -e "$2" || rc=$?
+    git grep --cached "${flags[@]}" -e "$2" || rc=$?
   else
-    git grep -a -h -o -i -E -e "$2" "$1" || rc=$?
+    git grep "${flags[@]}" -e "$2" "$1" || rc=$?
   fi
   if ((rc > 1)); then
     echo "privacy: git grep failed" >&2
@@ -33,17 +35,15 @@ grep_tree() {
 }
 
 check_files() {
-  local list="git grep -niE -e '$home' $1" mail="git grep -niE -e '$personal_mail' $1"
+  local found list="git grep -nE -e '$home' $1" mail="git grep -niE -e '$personal_mail' $1"
   if [[ "$1" == index ]]; then
-    list="git grep --cached -niE -e '$home'"
+    list="git grep --cached -nE -e '$home'"
     mail="git grep --cached -niE -e '$personal_mail'"
   fi
-  if [[ -n "$(grep_tree "$1" "$home" | real_homes)" ]]; then
-    fail "$2: a file holds a home folder path; list them with $list"
-  fi
-  if [[ -n "$(grep_tree "$1" "$personal_mail")" ]]; then
-    fail "$2: a file holds a personal email address; list them with $mail"
-  fi
+  found="$(grep_tree "$1" "$home" | real_homes)"
+  [[ -z "$found" ]] || fail "$2: a file holds a home folder path; list them with $list"
+  found="$(grep_tree "$1" "$personal_mail" any-case)"
+  [[ -z "$found" ]] || fail "$2: a file holds a personal email address; list them with $mail"
 }
 
 check_links() {
@@ -53,25 +53,42 @@ check_links() {
 }
 
 check_address() {
-  [[ "$2" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
+  local address
+  address="$(tr '[:upper:]' '[:lower:]' <<<"$2")"
+  [[ "$address" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
 }
 
 check_names() {
-  if [[ -n "$(awk '{print "/" $0}' <<<"$1" | real_homes)" ]]; then
-    fail "$2: a path name holds a home folder path"
-  fi
+  local found
+  found="$(awk '{print "/" $0}' <<<"$1" | real_homes)"
+  [[ -z "$found" ]] || fail "$2: a path name holds a home folder path"
+  found="$(grep -oiE "$personal_mail" <<<"$1" || true)"
+  [[ -z "$found" ]] || fail "$2: a path name holds a personal email address"
 }
 
 check_text() {
-  local name="$1" text="$2" addresses found
-  if [[ -n "$(real_homes <<<"$text")" ]]; then
-    fail "$name: remove the home folder path"
-  fi
+  local name="$1" text="$2" homes addresses found
+  homes="$(real_homes <<<"$text")"
+  [[ -z "$homes" ]] || fail "$name: remove the home folder path"
+  text="$(sed -E "s#$ssh_remote##g" <<<"$text")"
   addresses="$(grep -oE "$email" <<<"$text" || true)"
-  addresses+=$'\n'"$(sed -n 's/^[A-Za-z-]*-[Bb]y: .*<\(.*\)>.*/\1/p' <<<"$text")"
+  addresses+=$'\n'"$(sed -n 's/^[A-Za-z-]*-[Bb][Yy]:.*<\(.*\)>.*/\1/p' <<<"$text")"
   for found in $addresses; do
     check_address "$name" "$found"
   done
+}
+
+check_commit() {
+  local commit="$1" short="${1:0:12}" links names
+  links="$(git ls-tree -r "$commit" | awk '$1 == "120000" {print $4}')"
+  check_links "$links" "commit $short" "$short"
+  check_files "$commit" "commit $short"
+  names="$(git -c core.quotePath=false ls-tree -r --name-only "$commit")"
+  check_names "$names" "commit $short"
+  check_address "commit $short author" "$(git log -1 --format=%ae "$commit")"
+  check_address "commit $short committer" "$(git log -1 --format=%ce "$commit")"
+  check_text "commit $short identity names" "$(git log -1 --format='%an%n%cn' "$commit")"
+  check_text "commit $short message" "$(git log -1 --format=%B "$commit")"
 }
 
 case "${1:-index}" in
@@ -86,15 +103,7 @@ case "${1:-index}" in
     shift
     commits="$(git rev-list "$@")"
     for commit in $commits; do
-      short="${commit:0:12}"
-      links="$(git ls-tree -r "$commit" | awk '$1 == "120000" {print $4}')"
-      check_links "$links" "commit $short" "$short"
-      check_files "$commit" "commit $short"
-      names="$(git -c core.quotePath=false ls-tree -r --name-only "$commit")"
-      check_names "$names" "commit $short"
-      check_address "commit $short author" "$(git log -1 --format=%ae "$commit")"
-      check_address "commit $short committer" "$(git log -1 --format=%ce "$commit")"
-      check_text "commit $short message" "$(git log -1 --format=%B "$commit")"
+      check_commit "$commit"
     done
     ;;
   tag)
@@ -103,6 +112,7 @@ case "${1:-index}" in
     header="$(sed '/^$/q' <<<"$tag")"
     [[ "$(sed -n 's/^type //p' <<<"$header")" == commit ]] || fail "tag ${2:0:12}: tag a commit"
     check_address "tag ${2:0:12} tagger" "$(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$header")"
+    check_text "tag ${2:0:12} tagger name" "$(sed -n 's/^tagger \(.*\) <.*/\1/p' <<<"$header")"
     check_text "tag ${2:0:12} message" "$(sed '1,/^$/d' <<<"$tag")"
     ;;
   ref)
