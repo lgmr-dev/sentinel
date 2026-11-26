@@ -18,15 +18,18 @@ real_homes() {
 }
 
 grep_paths() {
-  local hits rc=0 where="$1"
-  [[ "$1" == index ]] && where=--cached
+  local hits rc=0 where="$1" list="git grep -nE -e '$home' $1"
+  if [[ "$1" == index ]]; then
+    where=--cached
+    list="git grep --cached -nE -e '$home'"
+  fi
   hits="$(git grep -a -h -o -E -e "$home" "$where")" || rc=$?
   if ((rc > 1)); then
     echo "privacy: git grep failed" >&2
     exit 2
   fi
   if [[ -n "$(real_homes <<<"$hits")" ]]; then
-    fail "$2: a file holds a home folder path; list them with git grep -nE '$home' $where"
+    fail "$2: a file holds a home folder path; list them with $list"
   fi
 }
 
