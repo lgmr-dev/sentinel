@@ -251,8 +251,9 @@ repository and run the installer again.
   Before a commit, `tools/privacy.sh` stops on a home folder path, a symbolic
   link or the address of a personal mailbox in a file. Before a push, it checks
   only the commits that the remote does not have. It stops on a personal
-  address in an author, committer, trailer, tag or branch name. CI runs the
-  same check on the commits of each pull request.
+  address in an author, committer, trailer, tag or branch name. It also stops on
+  a home folder path in a message and on history with another root commit.
+- CI runs the same privacy check on the commits of each pull request.
 - `make check` compares the imported files with `upstream/lock.json`.
 - `make eval` runs the eval cases that your changes touch, on Opus and Sol,
   with Claude Code and Codex, in a new temporary home folder with a fresh

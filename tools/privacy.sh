@@ -3,13 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export GIT_NO_REPLACE_OBJECTS=1
 
-home='([Hh][Tt][Tt][Pp][Ss]?://[^]/[:space:]"'"'"',;<>()|`\\{}[]+[^][:space:]"'"'"',;<>()|`\\{}[]*)?([A-Za-z]:)?(/|\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\{1,2})([[:alnum:]._-]|%[0-9A-Fa-f]{2}|[^[:print:][:cntrl:]])+'
+home='([Hh][Tt][Tt][Pp][Ss]?://(\[[0-9A-Fa-f:.]+\]|[^]/[:space:]"'"'"',;<>()|`\\{}[]+)[^][:space:]"'"'"',;<>()|`\\{}[]*)?([A-Za-z]:)?(/|\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\{1,2})([[:alnum:]._-]|%[0-9A-Fa-f]{2}|[^[:print:][:cntrl:]])+'
 web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
 ssh_remote='(^|[^A-Za-z0-9._%+-])git@[A-Za-z0-9.-]+(:|/)[A-Za-z0-9._~/-]+'
 personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota|tuta)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
-public_address='^([^@[:space:]]+@users\.noreply\.github\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@([a-z0-9-]+\.)*example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
+public_address='^([^@[:space:]]+@users\.noreply\.(github|gitlab)\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@([a-z0-9-]+\.)*example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
 not_address='@(v?[0-9]+\.[0-9]|[0-9]+x\.|[A-Za-z0-9_.-]+\.(service|socket|timer|target|mount|path|slice|scope|device|swap|automount)$)'
 status=0
 
@@ -63,7 +63,7 @@ check_utf16() {
     exit 2
   fi
   while IFS= read -r -d '' path; do
-    path="${path#"$1":}"
+    [[ "$1" == index ]] || path="${path#"$1":}"
     bom="$(git cat-file blob "$prefix$path" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
     [[ "$bom" == fffe || "$bom" == feff ]] || continue
     if ! text="$(git cat-file blob "$prefix$path" | iconv -f UTF-16 -t UTF-8)"; then
@@ -92,7 +92,7 @@ check_address() {
 check_addresses() {
   local name="$1" text addresses found
   text="$(sed -E "s#$ssh_remote##g" <<<"$2")"
-  addresses="$(grep -oE "$email" <<<"$text" | grep -vE "$not_address" || true)"
+  addresses="$(grep -oE "$email" <<<"$text" | grep -viE "$not_address" || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
   for found in $addresses; do
     check_address "$name" "$found"
@@ -117,19 +117,21 @@ check_text() {
 }
 
 check_commit() {
-  local commit="$1" short="${1:0:12}" links names mergetag
+  local commit="$1" short="${1:0:12}" links names mergetag tagger
   links="$(git ls-tree -r "$commit" | awk '$1 == "120000" {print $4}')"
   check_links "$links" "commit $short" "git ls-tree -r $short"
   check_files "$commit" "commit $short"
   names="$(git ls-tree -r -z --name-only "$commit" | tr '\0' '\n')"
   check_names "$names" "commit $short"
-  check_address "commit $short author" "$(git log -1 --format=%ae "$commit")"
-  check_address "commit $short committer" "$(git log -1 --format=%ce "$commit")"
-  check_text "commit $short identity names" "$(git log -1 --format='%an%n%cn' "$commit")"
-  check_text "commit $short message" "$(git log -1 --format=%B "$commit")"
-  mergetag="$(git cat-file commit "$commit" | sed -n '/^$/q; /^mergetag /,/^[^ ]/{ /^mergetag /s/^mergetag //p; /^ /s/^ //p; }')"
+  check_address "commit $short author" "$(git log -1 --no-show-signature --format=%ae "$commit")"
+  check_address "commit $short committer" "$(git log -1 --no-show-signature --format=%ce "$commit")"
+  check_text "commit $short identity names" "$(git log -1 --no-show-signature --format='%an%n%cn' "$commit")"
+  check_text "commit $short message" "$(git log -1 --no-show-signature --format=%B "$commit")"
+  mergetag="$(git cat-file commit "$commit" | awk '/^$/ { exit } /^mergetag / { tag = 1; sub(/^mergetag /, ""); print; next } /^ / { if (tag) { sub(/^ /, ""); print }; next } { tag = 0 }')"
   if [[ -n "$mergetag" ]]; then
-    check_address "commit $short merged tag tagger" "$(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$mergetag")"
+    while IFS= read -r tagger; do
+      check_address "commit $short merged tag tagger" "$tagger"
+    done < <(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$mergetag")
     check_text "commit $short merged tag" "$mergetag"
   fi
 }

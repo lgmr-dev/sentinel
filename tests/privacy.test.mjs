@@ -64,6 +64,7 @@ const files = [
   ['a home path after a URL in a table', `|https://a.example/x|${unixPath('home', 'alice', 'k')}|`, false],
   ['a home folder in a WSL share', ['', '', 'wsl$', 'Ubuntu', 'home', 'alice'].join('\\'), false],
   ['an upper-case web URL with a home-like path', 'HTTPS://github.com/o/r/blob/main/root/README', true],
+  ['a web URL with an IPv6 host', 'http://[::1]:8080/api/home/settings', true],
   ['a web URL with a home-like path', 'https://github.com/o/r/blob/main/portable/root/README', true],
   ['test data with an address', addressOf('a', 'x.io'), true],
   ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
@@ -136,7 +137,8 @@ const pushes = [
   ['two angle values in a sign-off', { message: `x\n\nSigned-off-by: A <${addressOf('alice', 'myhost')}> <${noreply}>` }, false],
   ['a subdomain of a reserved example domain', { message: `Mail ${addressOf('a', 'mail.example.com')}` }, true],
   ['a pre-release package version', { message: 'bump pkg@v1.0.0-rc.alpha and @scope/pkg@1.0.0-canary.abc' }, true],
-  ['an image size and a systemd unit', { message: 'Add logo@2x.png and enable wg-quick@wg0.service' }, true],
+  ['an image size and a systemd unit', { message: 'Add logo@2x.png, logo@2X.PNG and enable wg-quick@wg0.service' }, true],
+  ['a GitLab noreply author', { as: addressOf('1-a', 'users.noreply.gitlab.com') }, true],
   ['a branch name with a users folder', { ref: ['refs', 'heads', 'feat', 'users', 'login'].join('/') }, true],
   ['an upper-case noreply domain', { as: addressOf('1+a', 'USERS.NOREPLY.GITHUB.COM') }, true],
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
@@ -170,17 +172,40 @@ test('the printed link command lists a staged link', { skip }, (t) => {
   assert.match(spawnSync('bash', ['-c', command], { cwd: repo, encoding: 'utf8' }).stdout, /\tlink$/m);
 });
 
-test('pre-push checks the tagger of a merged signed tag', { skip }, (t) => {
-  const { repo, run } = setup(t);
+function signingKey(repo) {
   const key = path.join(repo, '..', 'key');
   assert.equal(spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key]).status, 0);
-  const signing = ['-c', 'gpg.format=ssh', '-c', `user.signingkey=${key}`];
-  run(['checkout', '-q', '-b', 'side']);
-  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'side']).status, 0);
-  assert.equal(run([...signing, 'tag', '-s', 'signed', '-m', 'signed'], { committer: personal }).status, 0);
+  return ['-c', 'gpg.format=ssh', '-c', `user.signingkey=${key}`];
+}
+
+test('pre-push checks the tagger of each merged signed tag', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  const signing = signingKey(repo);
+  for (const [branch, tagger] of [['first', noreply], ['second', personal]]) {
+    run(['checkout', '-q', '-b', branch, 'main']);
+    assert.equal(run(['commit', '-q', '--allow-empty', '-m', branch]).status, 0);
+    assert.equal(run([...signing, 'tag', '-s', `${branch}-tag`, '-m', branch], { committer: tagger }).status, 0);
+  }
   run(['checkout', '-q', 'main']);
-  assert.equal(run(['merge', '-q', '--no-ff', '--no-edit', 'signed']).status, 0);
+  assert.equal(run(['merge', '-q', '--no-ff', '--no-edit', 'first-tag', 'second-tag']).status, 0);
   assert.notEqual(run(['push', '-q', 'origin', 'HEAD:refs/heads/merged']).status, 0);
+});
+
+test('pre-push accepts a signed commit when log.showSignature is on', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  const signing = signingKey(repo);
+  assert.equal(run([...signing, 'commit', '-q', '-S', '--allow-empty', '-m', 'signed']).status, 0);
+  assert.equal(run(['-c', 'log.showSignature=true', 'push', '-q', 'origin', 'HEAD:refs/heads/signed']).status, 0);
+});
+
+test('pre-push accepts a branch when the remote main moved on', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  const other = path.join(repo, '..', 'other');
+  assert.equal(run(['clone', '-q', path.join(repo, '..', 'remote.git'), other], { cwd: path.dirname(repo) }).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'moved'], { cwd: other }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'main'], { cwd: other }).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'feature']).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/feature']).status, 0);
 });
 
 test('pre-push checks a renamed annotated tag', { skip }, (t) => {
@@ -192,7 +217,7 @@ test('pre-push checks a renamed annotated tag', { skip }, (t) => {
 
 test('pre-commit and pre-push stop a UTF-16 file with private data', { skip }, (t) => {
   const { repo, run } = setup(t);
-  for (const [name, text] of [['home.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`], ['mail.txt', `contact ${mailbox}\r\n`], ['größe.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`]]) {
+  for (const [name, text] of [['home.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`], ['mail.txt', `contact ${mailbox}\r\n`], ['größe.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`], ['index:settings.txt', `p=${unixPath('home', 'alice', 'x')}\r\n`]]) {
     fs.writeFileSync(path.join(repo, name), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]));
     run(['add', name]);
     assert.notEqual(run(['commit', '-q', '-m', name]).status, 0, name);

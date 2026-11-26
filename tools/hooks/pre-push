@@ -5,6 +5,13 @@ export GIT_NO_REPLACE_OBJECTS=1
 
 zero=0000000000000000000000000000000000000000
 advertised="$(git ls-remote "$2" 'refs/heads/*' 'refs/tags/*')"
+remote_main="$(awk '$2 == "refs/heads/main" {print $1}' <<<"$advertised")"
+if [[ -n "$remote_main" ]] && ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
+  if ! git fetch -q --no-write-fetch-head "$2" refs/heads/main; then
+    echo "pre-push: fetch the main branch of the remote first" >&2
+    exit 1
+  fi
+fi
 found="$(cut -f1 <<<"$advertised" | sed '/^$/d; s/$/^{commit}/' | git cat-file --batch-check='%(objectname)')"
 published=()
 missing=0
@@ -15,13 +22,8 @@ while read -r line; do
     published+=("$line")
   fi
 done <<<"$found"
-remote_main="$(awk '$2 == "refs/heads/main" {print $1}' <<<"$advertised")"
 public_roots=""
 if [[ -n "$remote_main" ]]; then
-  if ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
-    echo "pre-push: fetch the main branch of the remote first" >&2
-    exit 1
-  fi
   public_roots="$(git rev-list --max-parents=0 "$remote_main")"
 fi
 while read -r _ local_sha remote_ref _; do
