@@ -3,8 +3,18 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 zero=0000000000000000000000000000000000000000
-remote_refs="$(git ls-remote "$2" 'refs/heads/*' 'refs/tags/*' | cut -f1)"
-remote_main="$(git ls-remote "$2" refs/heads/main | cut -f1)"
+advertised="$(git ls-remote "$2" 'refs/heads/*' 'refs/tags/*')"
+found="$(cut -f1 <<<"$advertised" | sed '/^$/d; s/$/^{commit}/' | git cat-file --batch-check='%(objectname)')"
+published=()
+missing=0
+while read -r line; do
+  if [[ "$line" == *" missing" ]]; then
+    missing=$((missing + 1))
+  elif [[ -n "$line" ]]; then
+    published+=("$line")
+  fi
+done <<<"$found"
+remote_main="$(awk '$2 == "refs/heads/main" {print $1}' <<<"$advertised")"
 public_roots=""
 if [[ -n "$remote_main" ]]; then
   if ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
@@ -13,14 +23,9 @@ if [[ -n "$remote_main" ]]; then
   fi
   public_roots="$(git rev-list --max-parents=0 "$remote_main")"
 fi
-published=()
-for sha in $remote_refs; do
-  if git cat-file -e "$sha^{commit}" 2>/dev/null; then
-    published+=("$sha")
-  fi
-done
-while read -r _ local_sha _ _; do
+while read -r _ local_sha remote_ref _; do
   [[ "$local_sha" == "$zero" ]] && continue
+  tools/privacy.sh ref "$remote_ref"
   if [[ "$(git cat-file -t "$local_sha^{}")" != commit ]]; then
     echo "pre-push: ${local_sha:0:12} is not a commit" >&2
     exit 1
@@ -35,5 +40,10 @@ while read -r _ local_sha _ _; do
     done
   fi
   tools/privacy.sh tag "$local_sha"
-  tools/privacy.sh commits "$local_sha" --not ${published[@]+"${published[@]}"}
+  if ! tools/privacy.sh commits "$local_sha" --not ${published[@]+"${published[@]}"}; then
+    if ((missing > 0)); then
+      echo "pre-push: the remote has $missing refs that this clone lacks; run git fetch, then push again" >&2
+    fi
+    exit 1
+  fi
 done

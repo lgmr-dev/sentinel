@@ -2,10 +2,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-home='(^|[^A-Za-z0-9._~-])(/Users/|/home/|/root/|[A-Za-z]:\\{1,2}Users\\{1,2})[A-Za-z0-9._-]+'
+home='([A-Za-z][A-Za-z0-9+.-]*://[^/[:space:]]+[^[:space:]]*)?(/Users/|/home/|/root/|[A-Za-z]:\\{1,2}Users\\{1,2})[[:alnum:]._-]+'
+web_url='^[A-Za-z][A-Za-z0-9+.-]*://[^/]'
 synthetic_homes='^$'
-email='[A-Za-z0-9._%+-]+@[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)*'
-public_address='^([^@[:space:]]+@users\.noreply\.github\.com|(noreply|no-reply)@[A-Za-z0-9.-]+|[^@[:space:]]+@github\.com|[^@[:space:]]+@example\.(com|net|org)|[^@[:space:]]+@([A-Za-z0-9-]+\.)*(example|invalid|test|localhost))$'
+email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
+personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
+public_address='^([^@[:space:]]+@users\.noreply\.github\.com|git@[A-Za-z0-9.-]+|(noreply|support)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@example\.(com|net|org)|[^@[:space:]]+@([A-Za-z0-9-]+\.)*(example|invalid|test|localhost))$'
 status=0
 
 fail() {
@@ -14,22 +16,33 @@ fail() {
 }
 
 real_homes() {
-  grep -oE "$home" | sed -E 's#.*[/\\]##' | grep -vxE "$synthetic_homes" || true
+  grep -oiE "$home" | grep -viE "$web_url" | sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
 }
 
-grep_paths() {
-  local hits rc=0 where="$1" list="git grep -nE -e '$home' $1"
+grep_tree() {
+  local rc=0
   if [[ "$1" == index ]]; then
-    where=--cached
-    list="git grep --cached -nE -e '$home'"
+    git grep --cached -a -h -o -i -E -e "$2" || rc=$?
+  else
+    git grep -a -h -o -i -E -e "$2" "$1" || rc=$?
   fi
-  hits="$(git grep -a -h -o -E -e "$home" "$where")" || rc=$?
   if ((rc > 1)); then
     echo "privacy: git grep failed" >&2
     exit 2
   fi
-  if [[ -n "$(real_homes <<<"$hits")" ]]; then
+}
+
+check_files() {
+  local list="git grep -niE -e '$home' $1" mail="git grep -niE -e '$personal_mail' $1"
+  if [[ "$1" == index ]]; then
+    list="git grep --cached -niE -e '$home'"
+    mail="git grep --cached -niE -e '$personal_mail'"
+  fi
+  if [[ -n "$(grep_tree "$1" "$home" | real_homes)" ]]; then
     fail "$2: a file holds a home folder path; list them with $list"
+  fi
+  if [[ -n "$(grep_tree "$1" "$personal_mail")" ]]; then
+    fail "$2: a file holds a personal email address; list them with $mail"
   fi
 }
 
@@ -52,7 +65,7 @@ check_names() {
 check_text() {
   local name="$1" text="$2" addresses found
   if [[ -n "$(real_homes <<<"$text")" ]]; then
-    fail "$name: remove the home folder path from the message"
+    fail "$name: remove the home folder path"
   fi
   addresses="$(grep -oE "$email" <<<"$text" || true)"
   addresses+=$'\n'"$(sed -n 's/^[A-Za-z-]*-[Bb]y: .*<\(.*\)>.*/\1/p' <<<"$text")"
@@ -65,8 +78,8 @@ case "${1:-index}" in
   index)
     links="$(git ls-files --stage | awk '$1 == "120000" {print $4}')"
     check_links "$links" index HEAD
-    grep_paths index index
-    names="$(git ls-files)"
+    check_files index index
+    names="$(git -c core.quotePath=false ls-files)"
     check_names "$names" index
     ;;
   commits)
@@ -76,23 +89,27 @@ case "${1:-index}" in
       short="${commit:0:12}"
       links="$(git ls-tree -r "$commit" | awk '$1 == "120000" {print $4}')"
       check_links "$links" "commit $short" "$short"
-      grep_paths "$commit" "commit $short"
-      names="$(git ls-tree -r --name-only "$commit")"
+      check_files "$commit" "commit $short"
+      names="$(git -c core.quotePath=false ls-tree -r --name-only "$commit")"
       check_names "$names" "commit $short"
       check_address "commit $short author" "$(git log -1 --format=%ae "$commit")"
       check_address "commit $short committer" "$(git log -1 --format=%ce "$commit")"
-      check_text "commit $short" "$(git log -1 --format=%B "$commit")"
+      check_text "commit $short message" "$(git log -1 --format=%B "$commit")"
     done
     ;;
   tag)
     [[ "$(git cat-file -t "$2")" == tag ]] || exit 0
-    [[ "$(git cat-file tag "$2" | sed -n 's/^type //p')" == commit ]] || fail "tag ${2:0:12}: tag a commit"
-    tagger="$(git cat-file tag "$2" | sed -n 's/^tagger .*<\(.*\)> .*/\1/p')"
-    check_address "tag ${2:0:12} tagger" "$tagger"
-    check_text "tag ${2:0:12}" "$(git cat-file tag "$2" | sed '1,/^$/d')"
+    tag="$(git cat-file tag "$2")"
+    header="$(sed '/^$/q' <<<"$tag")"
+    [[ "$(sed -n 's/^type //p' <<<"$header")" == commit ]] || fail "tag ${2:0:12}: tag a commit"
+    check_address "tag ${2:0:12} tagger" "$(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$header")"
+    check_text "tag ${2:0:12} message" "$(sed '1,/^$/d' <<<"$tag")"
+    ;;
+  ref)
+    check_text "ref name" "$2"
     ;;
   *)
-    echo "usage: tools/privacy.sh [index | commits <rev-list arguments> | tag <object>]" >&2
+    echo "usage: tools/privacy.sh [index | commits <rev-list arguments> | tag <object> | ref <name>]" >&2
     exit 2
     ;;
 esac

@@ -247,10 +247,12 @@ repository and run the installer again.
 - `make lint` checks the shell scripts, the privacy of the files and the STE
   prose.
 - `make hooks` turns on the Git hooks of `tools/hooks` in your clone. Run it
-  once in each new clone. Before a commit, `tools/privacy.sh` stops on a home
-  folder path or a symbolic link. Before a push, it also stops on a personal
-  email address in an author, committer, trailer or tag. CI runs the same
-  check on the commits of each pull request.
+  once in each new clone. Git then ignores the hooks in `.git/hooks` of that
+  clone. Before a commit, `tools/privacy.sh` checks the files. It stops on a
+  home folder path, a symbolic link or the address of a personal mailbox. Before a
+  push, it also stops on a personal address in an author, committer, trailer,
+  tag or branch name, in the commits that the remote does not have. CI runs
+  the same check on the commits of each pull request.
 - `make check` compares the imported files with `upstream/lock.json`.
 - `make eval` runs the eval cases that your changes touch, on Opus and Sol,
   with Claude Code and Codex, in a new temporary home folder with a fresh
