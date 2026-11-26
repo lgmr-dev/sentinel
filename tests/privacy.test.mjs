@@ -59,6 +59,9 @@ const files = [
   ['a home path after a URL and a comma', `https://a.example/x,${unixPath('home', 'alice')}`, false],
   ['a file URL with a host', `file://localhost${unixPath('home', 'alice', 'x')}`, false],
   ['a Windows home path without a drive', ['', 'Users', 'alice', 'secret'].join('\\'), false],
+  ['a home path after a URL in a table', `|https://a.example/x|${unixPath('home', 'alice', 'k')}|`, false],
+  ['a home folder in a WSL share', ['', '', 'wsl$', 'Ubuntu', 'home', 'alice'].join('\\'), false],
+  ['an upper-case web URL with a home-like path', 'HTTPS://github.com/o/r/blob/main/root/README', true],
   ['a web URL with a home-like path', 'https://github.com/o/r/blob/main/portable/root/README', true],
   ['test data with an address', addressOf('a', 'x.io'), true],
 ];
@@ -98,6 +101,18 @@ test('pre-commit stops a symbolic link, home folders and mailboxes in path names
   run(['rm', '-rq', '--cached', 'backup']);
   write(`notes-${mailbox}.txt`, 'x\n');
   assert.notEqual(run(['commit', '-q', '-m', 'names']).status, 0);
+  run(['rm', '-q', '--cached', `notes-${mailbox}.txt`]);
+  write(`notes-${personal}.txt`, 'x\n');
+  assert.notEqual(run(['commit', '-q', '-m', 'names']).status, 0);
+});
+
+test('pre-push reads the real commits and not replacement objects', { skip }, (t) => {
+  const { run } = setup(t);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'x'], { as: personal }).status, 0);
+  const tree = run(['rev-parse', 'HEAD^{tree}']).stdout.trim();
+  const clean = run(['commit-tree', tree, '-p', 'HEAD~1', '-m', 'x']).stdout.trim();
+  assert.equal(run(['replace', 'HEAD', clean]).status, 0);
+  assert.notEqual(run(['push', '-q', 'origin', 'HEAD:refs/heads/replaced']).status, 0);
 });
 
 const pushes = [
@@ -110,6 +125,11 @@ const pushes = [
   ['a home path in the message', { message: `see ${unixPath('Users', 'alice', 'notes')}` }, false],
   ['a personal address in the ref name', { ref: `refs/heads/${personal}` }, false],
   ['an SSH remote in the message', { message: `Push to ${addressOf('git', 'github.com')}:o/r.git` }, true],
+  ['an ssh URL in the message', { message: `Clone ssh://${addressOf('git', 'github.com')}/o/r.git` }, true],
+  ['a personal address after an SSH remote and a comma', { message: `See ${addressOf('git', 'github.com')}:o/r.git,${personal}` }, false],
+  ['a generic type in a trailer', { message: 'x\n\nCaused-by: List<String> change' }, true],
+  ['a GitHub web-flow committer', { committer: addressOf('web-flow', 'github.com') }, true],
+  ['a branch name with a users folder', { ref: ['refs', 'heads', 'feat', 'users', 'login'].join('/') }, true],
   ['an upper-case noreply domain', { as: addressOf('1+a', 'USERS.NOREPLY.GITHUB.COM') }, true],
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
   ['a personal address in the author name', { extra: { GIT_AUTHOR_NAME: `A ${personal}` } }, false],

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+export GIT_NO_REPLACE_OBJECTS=1
 
-home='(https?://[^/[:space:]"'"'"',;<>()\\]+[^[:space:]"'"'"',;<>()\\]*)?(/[Uu][Ss][Ee][Rr][Ss]/|/home/|/root/|([A-Za-z]:)?\\{1,2}[Uu][Ss][Ee][Rr][Ss]\\{1,2})([[:alnum:]._-]|[^[:print:][:cntrl:]])+'
+home='([Hh][Tt][Tt][Pp][Ss]?://[^]/[:space:]"'"'"',;<>()|`\\{}[]+[^][:space:]"'"'"',;<>()|`\\{}[]*)?([A-Za-z]:)?(/|\\{1,2})([Uu][Ss][Ee][Rr][Ss]|home|root)(/|\\{1,2})([[:alnum:]._-]|[^[:print:][:cntrl:]])+'
 web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
-ssh_remote='git@[A-Za-z0-9.-]+:[^[:space:]]*'
+ssh_remote='git@[A-Za-z0-9.-]+[:/][^][:space:]"'"'"',;<>()|`{}[]*'
 personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
-public_address='^([^@[:space:]]+@users\.noreply\.github\.com|(noreply|support)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
+public_address='^([^@[:space:]]+@users\.noreply\.github\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
 status=0
 
 fail() {
@@ -58,24 +59,31 @@ check_address() {
   [[ "$address" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
 }
 
+check_addresses() {
+  local name="$1" text addresses found
+  text="$(sed -E "s#$ssh_remote##g" <<<"$2")"
+  addresses="$(grep -oE "$email" <<<"$text" || true)"
+  addresses+=$'\n'"$(sed -n 's/^[A-Za-z-]*-[Bb][Yy]:.*<\(.*\)>.*/\1/p' <<<"$text")"
+  for found in $addresses; do
+    [[ "$found" == *@* ]] && check_address "$name" "$found"
+  done
+  return 0
+}
+
 check_names() {
   local found
   found="$(awk '{print "/" $0}' <<<"$1" | real_homes)"
   [[ -z "$found" ]] || fail "$2: a path name holds a home folder path"
   found="$(grep -oiE "$personal_mail" <<<"$1" || true)"
   [[ -z "$found" ]] || fail "$2: a path name holds a personal email address"
+  check_addresses "$2 path name" "$1"
 }
 
 check_text() {
-  local name="$1" text="$2" homes addresses found
-  homes="$(real_homes <<<"$text")"
-  [[ -z "$homes" ]] || fail "$name: remove the home folder path"
-  text="$(sed -E "s#$ssh_remote##g" <<<"$text")"
-  addresses="$(grep -oE "$email" <<<"$text" || true)"
-  addresses+=$'\n'"$(sed -n 's/^[A-Za-z-]*-[Bb][Yy]:.*<\(.*\)>.*/\1/p' <<<"$text")"
-  for found in $addresses; do
-    check_address "$name" "$found"
-  done
+  local homes
+  homes="$(real_homes <<<"$2")"
+  [[ -z "$homes" ]] || fail "$1: remove the home folder path"
+  check_addresses "$1" "$2"
 }
 
 check_commit() {
@@ -116,7 +124,7 @@ case "${1:-index}" in
     check_text "tag ${2:0:12} message" "$(sed '1,/^$/d' <<<"$tag")"
     ;;
   ref)
-    check_text "ref name" "$2"
+    check_addresses "ref name" "$2"
     ;;
   *)
     echo "usage: tools/privacy.sh [index | commits <rev-list arguments> | tag <object> | ref <name>]" >&2
