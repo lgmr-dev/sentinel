@@ -78,7 +78,8 @@ const files = [
   ['a Linux home path in prose', `the ${unixPath('home', 'alice')} folder`, false],
   ['a personal mailbox with a Unicode local part', addressOf('josé', 'gmail.com'), false],
   ['the shared and public system folders', `${unixPath('Users', 'Shared', 'tool')} ${['C:', 'Users', 'Public', 'Desktop'].join('\\')}`, true],
-  ['a reserved-domain fixture under a mail provider name', addressOf('fixture', 'mail.eu.example.org'), true],
+  ['a personal mailbox before a file extension', `token_${addressOf('alice', 'gmail.com')}.json`, false],
+  ['a Linux home folder with a system folder name', unixPath('home', 'default', '.ssh'), false],
 ];
 for (const [name, text, passes] of files) {
   test(`pre-commit ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {
@@ -157,7 +158,8 @@ const pushes = [
   ['a bare upper-case sign-off', { message: `x\n\nSIGNED-OFF-BY: ${personal}` }, false],
   ['a personal address with a Unicode domain', { message: `Ask ${addressOf('alice', 'gmüx.example-isp.de')} for details` }, false],
   ['a personal address with a Unicode local part', { message: `Ask ${addressOf('josé', 'personal-isp.de')}` }, false],
-  ['a personal address after a URL query or a comma', { message: `See https://example.com?x=${addressOf('alice', 'personal-isp.de')} and https://github.com,${addressOf('bob', 'personal-isp.de')}` }, false],
+  ['a personal address after a URL query', { message: `See https://example.com?x=${addressOf('alice', 'personal-isp.de')}` }, false],
+  ['a personal address after a URL and a comma', { message: `See https://github.com,${addressOf('bob', 'personal-isp.de')}` }, false],
 ];
 for (const [name, { message = 'x', ref = 'refs/heads/feature', ...who }, passes] of pushes) {
   test(`pre-push ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {

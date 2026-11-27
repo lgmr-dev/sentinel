@@ -15,7 +15,7 @@ regex = '''((?i:https?)://(\[[0-9A-Fa-f:.]+\]|[^/\s"',;<>()|`\\{}\[\]]+)([^\s"',
 [[rules.allowlists]]
 description = "The shared and public system folders"
 regexTarget = "match"
-regexes = ['''(?i)[/\\](shared|public|default)\.*$''']
+regexes = ['''(?i)[/\\]users[/\\]{1,2}(shared|public|default)\.*$''']
 
 [[rules.allowlists]]
 description = "A web URL with a home-like path"
