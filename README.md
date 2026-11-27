@@ -244,7 +244,18 @@ repository and run the installer again.
 - `make test` runs the installer and import tests. It needs Node 24 or later.
   CI also runs them on macOS and Windows. The run fails when a test leaves a
   file or folder in the temporary directory.
-- `make lint` checks the shell script, home paths and the STE prose.
+- `make lint` checks the shell scripts, the privacy of the files and the STE
+  prose.
+- Run `make hooks` once in each new clone to turn on the Git hooks of
+  `tools/hooks`. Git then ignores the hooks in `.git/hooks` of that clone.
+  Before a commit, `tools/privacy.sh` stops on a home folder path, a symbolic
+  link or the address of a personal mailbox in a file. Before a push, it checks
+  only the commits that the remote does not have. It stops on a personal
+  address in an author, committer, trailer, tag or branch name. It also stops on
+  a home folder path in a message and on history with another root commit.
+- CI runs the same privacy check on the commits of each pull request.
+- Rebase each open branch on `main` after the hooks arrive. Git runs no hook
+  in a branch without `tools/hooks`.
 - `make check` compares the imported files with `upstream/lock.json`.
 - `make eval` runs the eval cases that your changes touch, on Opus and Sol,
   with Claude Code and Codex, in a new temporary home folder with a fresh

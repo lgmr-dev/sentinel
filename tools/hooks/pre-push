@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+export GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1
+
+zero=0000000000000000000000000000000000000000
+fetch_objects() {
+  local filter=()
+  if git config --get-regexp '^remote\..*\.promisor$' 2>/dev/null | grep -q ' true$'; then
+    filter=(--filter=blob:none)
+  fi
+  git fetch -q --no-write-fetch-head ${filter[@]+"${filter[@]}"} "$@"
+}
+advertised="$(git ls-remote --refs "$2" 'refs/heads/*' 'refs/tags/*')"
+remote_main="$(awk '$2 == "refs/heads/main" {print $1}' <<<"$advertised")"
+if [[ -n "$remote_main" ]] && ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
+  if ! fetch_objects "$2" refs/heads/main; then
+    echo "pre-push: fetch the main branch of the remote first" >&2
+    exit 1
+  fi
+fi
+
+load_published() {
+  local found line ref
+  found="$(cut -f1 <<<"$advertised" | sed '/^$/d; s/$/^{commit}/' | git cat-file --batch-check='%(objectname)' 2>/dev/null)"
+  published=()
+  missing_refs=()
+  while IFS=$'\t' read -r line ref; do
+    if [[ "$line" == *" missing" ]]; then
+      missing_refs+=("$ref")
+    elif [[ -n "$line" ]]; then
+      published+=("$line")
+    fi
+  done < <(paste <(printf '%s\n' "$found") <(cut -f2 <<<"$advertised"))
+}
+
+check_commits() {
+  {
+    echo "$1"
+    for sha in ${published[@]+"${published[@]}"}; do
+      echo "^$sha"
+    done
+  } | GIT_NO_LAZY_FETCH=0 tools/privacy.sh commits --stdin
+}
+
+load_published
+fetched=0
+public_roots=""
+if [[ -n "$remote_main" && "$(git rev-parse --is-shallow-repository)" != true ]]; then
+  public_roots="$(git rev-list --max-parents=0 "$remote_main")"
+fi
+report="$(mktemp)"
+trap 'rm -f "$report"' EXIT
+while read -r _ local_sha remote_ref _; do
+  [[ "$local_sha" == "$zero" ]] && continue
+  tools/privacy.sh ref "$remote_ref"
+  if [[ "$(git cat-file -t "$local_sha^{}")" != commit ]]; then
+    echo "pre-push: ${local_sha:0:12} is not a commit" >&2
+    exit 1
+  fi
+  if [[ -n "$public_roots" ]]; then
+    roots="$(git rev-list --max-parents=0 "$local_sha")"
+    for root in $roots; do
+      if ! grep -qx "$root" <<<"$public_roots"; then
+        echo "pre-push: ${local_sha:0:12} does not start at the root commit of the remote main" >&2
+        exit 1
+      fi
+    done
+  fi
+  tools/privacy.sh tag "$local_sha"
+  if check_commits "$local_sha" 2>"$report"; then
+    continue
+  fi
+  if ((fetched == 0 && ${#missing_refs[@]} > 0)) &&
+    fetch_objects "$2" "${missing_refs[@]}" 2>/dev/null; then
+    fetched=1
+    load_published
+    if check_commits "$local_sha" 2>"$report"; then
+      continue
+    fi
+  fi
+  cat "$report" >&2
+  exit 1
+done
