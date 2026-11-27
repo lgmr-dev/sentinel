@@ -4,7 +4,7 @@ cd "$(git rev-parse --show-toplevel)"
 export GIT_NO_REPLACE_OBJECTS=1
 
 zero=0000000000000000000000000000000000000000
-advertised="$(git ls-remote "$2" 'refs/heads/*' 'refs/tags/*')"
+advertised="$(git ls-remote --refs "$2" 'refs/heads/*' 'refs/tags/*')"
 remote_main="$(awk '$2 == "refs/heads/main" {print $1}' <<<"$advertised")"
 if [[ -n "$remote_main" ]] && ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
   if ! git fetch -q --no-write-fetch-head "$2" refs/heads/main; then

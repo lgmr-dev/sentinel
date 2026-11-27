@@ -208,7 +208,8 @@ test('pre-push accepts a clean push from a stale clone of a published topic bran
   const other = path.join(repo, '..', 'other');
   assert.equal(run(['clone', '-q', '--branch', 'topic', path.join(repo, '..', 'remote.git'), other], { cwd: path.dirname(repo) }).status, 0);
   assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'moved'], { cwd: other }).status, 0);
-  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'topic'], { cwd: other }).status, 0);
+  assert.equal(run(['tag', '-a', 'v9', '-m', 'release'], { cwd: other }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'topic', 'v9'], { cwd: other }).status, 0);
   assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'clean child']).status, 0);
   assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/child']).status, 0);
 });
