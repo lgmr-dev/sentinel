@@ -10,9 +10,10 @@ web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
 ssh_remote='(^|[^A-Za-z0-9._%+-])git@[A-Za-z0-9.-]+(:|/)[A-Za-z0-9._~/-]+'
-personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|mail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota|tuta|163|126|yeah|qq|foxmail|sina|naver|hanmail|daum|seznam|libero|orange|wanadoo|laposte|t-online|rediffmail|rocketmail|comcast|verizon|btinternet|bigpond)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
+personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|mail|hotmail|outlook|live|msn|passport|icloud|me|mac|yahoo|ymail|rocketmail|aol|aim|proton|protonmail|pm|tutanota|tuta|tutamail|keemail|fastmail|hey|posteo|mailbox|runbox|startmail|disroot|riseup|skiff|duck|zoho|att|sbcglobal|bellsouth|pacbell|prodigy|swbell|ameritech|flash|comcast|xfinity|verizon|cox|charter|spectrum|rr|twc|earthlink|juno|netzero|frontier|frontiernet|centurylink|windstream|optonline|optimum|suddenlink|mediacom|shaw|rogers|sympatico|bell|videotron|telus|cogeco|btinternet|btopenworld|sky|virginmedia|ntlworld|blueyonder|talktalk|tiscali|gmx|web|t-online|freenet|arcor|free|sfr|neuf|laposte|orange|wanadoo|libero|virgilio|alice|tin|tim|seznam|centrum|atlas|onet|wp|o2|interia|abv|yandex|ya|rambler|inbox|list|bk|naver|daum|hanmail|nate|163|126|yeah|qq|foxmail|sina|sohu|aliyun|rediffmail|uol|bol|terra|ig|bigpond|optusnet|iinet|tpg|xtra)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
 public_address='^([^@[:space:]]+@users\.noreply\.(github|gitlab)\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@([a-z0-9-]+\.)*example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
 not_address='@(v?[0-9]+\.[0-9]|[0-9]+x\.|[A-Za-z0-9_.-]+\.(service|socket|timer|target|mount|path|slice|scope|device|swap|automount)$)'
+spaced=users-path-with-a-space
 status=0
 
 fail() {
@@ -22,13 +23,15 @@ fail() {
 
 real_homes() {
   grep -oE "$home( [[:alnum:]])?" | grep -viE "$web_url" |
-    awk '/[Uu][Ss][Ee][Rr][Ss](\\|\/).* [[:alnum:]]$/ { print "a name with a space"; next } { sub(/ [[:alnum:]]$/, ""); print }' |
+    awk '/[Uu][Ss][Ee][Rr][Ss](\\|\/).* [[:alnum:]]$/ { print "users-path-with-a-space"; next } { sub(/ [[:alnum:]]$/, ""); print }' |
     sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
 }
 
 check_signature() {
-  local block found
-  block="$(sed -n -E '/-----BEGIN (SIGNED MESSAGE|PKCS7|PGP SIGNATURE)-----/,/-----END (SIGNED MESSAGE|PKCS7|PGP SIGNATURE)-----/p' <<<"$2" | grep -v -e '^-----' -e '^=' -e ':' | tr -d ' ' || true)"
+  local armored block found
+  armored="$(sed -n -E '/-----BEGIN (SIGNED MESSAGE|PKCS7|PGP SIGNATURE)-----/,/-----END (SIGNED MESSAGE|PKCS7|PGP SIGNATURE)-----/p' <<<"$2")"
+  check_addresses "$1" "$(grep ':' <<<"$armored" || true)"
+  block="$(grep -v -e '^-----' -e '^=' -e ':' <<<"$armored" | tr -d ' ' || true)"
   [[ -n "$block" ]] || return 0
   if ! base64 --decode <<<"$block" >/dev/null 2>&1; then
     fail "$1: the signature cannot be read"
@@ -60,7 +63,11 @@ check_files() {
   list="git grep -nE -e $(printf '%q' "$home") $where"
   mail="git grep -niE -e $(printf '%q' "$personal_mail") $where"
   found="$(grep_tree "$1" "$home( [[:alnum:]])?" | real_homes)"
-  [[ -z "$found" ]] || fail "$2: a file holds a home folder path; list them with $list"
+  if grep -qx "$spaced" <<<"$found"; then
+    fail "$2: a file holds a Users path that a space and a word follow; list them with $list"
+  elif [[ -n "$found" ]]; then
+    fail "$2: a file holds a home folder path; list them with $list"
+  fi
   found="$(grep_tree "$1" "$personal_mail" any-case)"
   [[ -z "$found" ]] || fail "$2: a file holds a personal email address; list them with $mail"
   check_utf16 "$1" "$2"
@@ -130,7 +137,11 @@ check_names() {
 check_text() {
   local homes
   homes="$(real_homes <<<"$2")"
-  [[ -z "$homes" ]] || fail "$1: remove the home folder path"
+  if grep -qx "$spaced" <<<"$homes"; then
+    fail "$1: remove the Users path that a space and a word follow"
+  elif [[ -n "$homes" ]]; then
+    fail "$1: remove the home folder path"
+  fi
   check_addresses "$1" "$2"
 }
 

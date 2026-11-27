@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-export GIT_NO_REPLACE_OBJECTS=1
+export GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1
 
 zero=0000000000000000000000000000000000000000
 advertised="$(git ls-remote --refs "$2" 'refs/heads/*' 'refs/tags/*')"
@@ -33,7 +33,7 @@ check_commits() {
     for sha in ${published[@]+"${published[@]}"}; do
       echo "^$sha"
     done
-  } | tools/privacy.sh commits --stdin
+  } | GIT_NO_LAZY_FETCH=0 tools/privacy.sh commits --stdin
 }
 
 load_published

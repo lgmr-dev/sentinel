@@ -71,6 +71,8 @@ const files = [
   ['test data with an address', addressOf('a', 'x.io'), true],
   ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
   ['a NetEase mailbox', addressOf('alice', '163.com'), false],
+  ['an AT&T mailbox in a mailmap', `Alice <${addressOf('alice', 'att.net')}>`, false],
+  ['a HEY mailbox', addressOf('alice', 'hey.com'), false],
   ['a quoted Windows profile with a space', `"${['C:', 'Users', 'Bob Smith', 'x'].join('\\')}"`, false],
   ['a Git Bash profile with a space', `"${unixPath('c', 'Users', 'Bob Smith', 'x')}"`, false],
   ['a Linux home path in prose', `the ${unixPath('home', 'alice')} folder`, false],
@@ -268,6 +270,8 @@ test('pre-push checks the addresses in S/MIME and PGP signatures', { skip }, (t)
   assert.notEqual(run(['push', '-q', 'origin', `${smime}:refs/heads/smime`]).status, 0);
   const pgp = signedCommit(run, () => ['gpgsig -----BEGIN PGP SIGNATURE-----', ' ', ` ${certificate()}`, ' =AbCd', ' -----END PGP SIGNATURE-----']);
   assert.notEqual(run(['push', '-q', 'origin', `${pgp}:refs/heads/pgp`]).status, 0);
+  const comment = signedCommit(run, () => ['gpgsig -----BEGIN PGP SIGNATURE-----', ` Comment: ${personal}`, ' ', ` ${Buffer.from('plain').toString('base64')}`, ' -----END PGP SIGNATURE-----']);
+  assert.notEqual(run(['push', '-q', 'origin', `${comment}:refs/heads/comment`]).status, 0);
 });
 
 test('pre-push checks the signature of a merged tag', { skip }, (t) => {
