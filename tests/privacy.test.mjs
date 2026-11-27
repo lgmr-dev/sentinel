@@ -76,6 +76,9 @@ const files = [
   ['a quoted Windows profile with a space', `"${['C:', 'Users', 'Bob Smith', 'x'].join('\\')}"`, false],
   ['a Git Bash profile with a space', `"${unixPath('c', 'Users', 'Bob Smith', 'x')}"`, false],
   ['a Linux home path in prose', `the ${unixPath('home', 'alice')} folder`, false],
+  ['a personal mailbox with a Unicode local part', addressOf('josé', 'gmail.com'), false],
+  ['the shared and public system folders', `${unixPath('Users', 'Shared', 'tool')} ${['C:', 'Users', 'Public', 'Desktop'].join('\\')}`, true],
+  ['a reserved-domain fixture under a mail provider name', addressOf('fixture', 'mail.eu.example.org'), true],
 ];
 for (const [name, text, passes] of files) {
   test(`pre-commit ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {
@@ -152,6 +155,9 @@ const pushes = [
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
   ['a personal address in the author name', { extra: { GIT_AUTHOR_NAME: `A ${personal}` } }, false],
   ['a bare upper-case sign-off', { message: `x\n\nSIGNED-OFF-BY: ${personal}` }, false],
+  ['a personal address with a Unicode domain', { message: `Ask ${addressOf('alice', 'gmüx.example-isp.de')} for details` }, false],
+  ['a personal address with a Unicode local part', { message: `Ask ${addressOf('josé', 'personal-isp.de')}` }, false],
+  ['a personal address after a URL query or a comma', { message: `See https://example.com?x=${addressOf('alice', 'personal-isp.de')} and https://github.com,${addressOf('bob', 'personal-isp.de')}` }, false],
 ];
 for (const [name, { message = 'x', ref = 'refs/heads/feature', ...who }, passes] of pushes) {
   test(`pre-push ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {
@@ -160,6 +166,48 @@ for (const [name, { message = 'x', ref = 'refs/heads/feature', ...who }, passes]
     assert.equal(run(['push', '-q', 'origin', `HEAD:${ref}`]).status === 0, passes);
   });
 }
+
+const bot = addressOf('noreply', 'anthropic.com');
+const cLocale = [
+  ['a bot address in curly quotes and an HTTPS clone URL with a user', `“${bot}” and https://${addressOf('org', 'dev.azure.com')}/org/p/_git/r`],
+  ['a bot address between non-ASCII punctuation', `by —${bot}。`],
+  ['a bot address before an em dash and more text', `by ${bot}—see the notes`],
+];
+for (const [name, message] of cLocale) {
+  test(`pre-push accepts ${name} in the C locale`, { skip }, (t) => {
+    const { run } = setup(t);
+    assert.equal(run(['commit', '-q', '--allow-empty', '-m', message]).status, 0);
+    const push = run(['push', '-q', 'origin', 'HEAD:refs/heads/feature'], { extra: { LC_ALL: 'C' } });
+    assert.equal(push.status, 0, push.stderr);
+  });
+}
+
+test('pre-commit ignores the files of a submodule with submodule.recurse on', { skip }, (t) => {
+  const { repo, run, write } = setup(t);
+  const module = path.join(path.dirname(repo), 'module');
+  assert.equal(run(['init', '-q', '-b', 'main', module]).status, 0);
+  fs.writeFileSync(path.join(module, 'README'), `${unixPath('home', 'alice', 'notes')}\n`);
+  assert.equal(run(['add', 'README'], { cwd: module }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'module'], { cwd: module }).status, 0);
+  assert.equal(run(['-c', 'protocol.file.allow=always', 'submodule', '--quiet', 'add', module, 'module']).status, 0);
+  write('f.txt', 'clean\n');
+  const commit = run(['-c', 'submodule.recurse=true', 'commit', '-q', '-m', 'module']);
+  assert.equal(commit.status, 0, commit.stderr);
+});
+
+test('pre-push accepts a branch deletion in a SHA-256 repository', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  const dir = path.dirname(repo);
+  const clone = path.join(dir, 'sha256');
+  assert.equal(run(['init', '-q', '--bare', '--object-format=sha256', '-b', 'main', path.join(dir, 'sha256.git')], { cwd: dir }).status, 0);
+  assert.equal(run(['clone', '-q', path.join(dir, 'sha256.git'), clone], { cwd: dir }).status, 0);
+  fs.cpSync(path.join(repo, 'tools'), path.join(clone, 'tools'), { recursive: true });
+  assert.equal(run(['config', 'core.hooksPath', 'tools/hooks'], { cwd: clone }).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'sha256'], { cwd: clone }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'HEAD:refs/heads/main', 'HEAD:refs/heads/gone'], { cwd: clone }).status, 0);
+  const deletion = run(['push', '-q', 'origin', '--delete', 'gone'], { cwd: clone });
+  assert.equal(deletion.status, 0, deletion.stderr);
+});
 
 test('the printed list command runs and names the file', { skip }, (t) => {
   const { repo, write } = setup(t);
