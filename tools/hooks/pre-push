@@ -4,10 +4,17 @@ cd "$(git rev-parse --show-toplevel)"
 export GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1
 
 zero=0000000000000000000000000000000000000000
+fetch_objects() {
+  local filter=()
+  if git config --get-regexp '^remote\..*\.promisor$' 2>/dev/null | grep -q ' true$'; then
+    filter=(--filter=blob:none)
+  fi
+  git fetch -q --no-write-fetch-head ${filter[@]+"${filter[@]}"} "$@"
+}
 advertised="$(git ls-remote --refs "$2" 'refs/heads/*' 'refs/tags/*')"
 remote_main="$(awk '$2 == "refs/heads/main" {print $1}' <<<"$advertised")"
 if [[ -n "$remote_main" ]] && ! git cat-file -e "$remote_main^{commit}" 2>/dev/null; then
-  if ! git fetch -q --no-write-fetch-head "$2" refs/heads/main; then
+  if ! fetch_objects "$2" refs/heads/main; then
     echo "pre-push: fetch the main branch of the remote first" >&2
     exit 1
   fi
@@ -15,7 +22,7 @@ fi
 
 load_published() {
   local found line ref
-  found="$(cut -f1 <<<"$advertised" | sed '/^$/d; s/$/^{commit}/' | git cat-file --batch-check='%(objectname)')"
+  found="$(cut -f1 <<<"$advertised" | sed '/^$/d; s/$/^{commit}/' | git cat-file --batch-check='%(objectname)' 2>/dev/null)"
   published=()
   missing_refs=()
   while IFS=$'\t' read -r line ref; do
@@ -65,7 +72,7 @@ while read -r _ local_sha remote_ref _; do
     continue
   fi
   if ((fetched == 0 && ${#missing_refs[@]} > 0)) &&
-    git fetch -q --no-write-fetch-head "$2" "${missing_refs[@]}" 2>/dev/null; then
+    fetch_objects "$2" "${missing_refs[@]}" 2>/dev/null; then
     fetched=1
     load_published
     if check_commits "$local_sha" 2>"$report"; then

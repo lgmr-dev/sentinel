@@ -220,6 +220,27 @@ test('pre-push accepts a clean push from a stale clone of a published topic bran
   assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/child']).status, 0);
 });
 
+test('pre-push in a partial clone fetches no file contents for its retry', { skip }, (t) => {
+  const { repo, run } = setup(t);
+  const remote = path.join(repo, '..', 'remote.git');
+  run(['config', 'uploadpack.allowFilter', 'true'], { cwd: remote });
+  assert.equal(run(['checkout', '-q', '-b', 'topic']).status, 0);
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'published personal'], { as: personal }).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'topic']).status, 0);
+  const partial = path.join(repo, '..', 'partial');
+  assert.equal(run(['clone', '-q', '--filter=blob:none', '--branch', 'topic', `file://${remote}`, partial], { cwd: path.dirname(repo) }).status, 0);
+  fs.cpSync(path.join(repo, 'tools'), path.join(partial, 'tools'), { recursive: true });
+  run(['config', 'core.hooksPath', 'tools/hooks'], { cwd: partial });
+  fs.writeFileSync(path.join(repo, 'large.bin'), Buffer.alloc(1 << 20, 7));
+  run(['add', 'large.bin']);
+  assert.equal(run(['commit', '-q', '-m', 'moved with a large file']).status, 0);
+  assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'push', '-q', 'origin', 'topic']).status, 0);
+  const large = run(['rev-parse', 'HEAD:large.bin']).stdout.trim();
+  assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'clean child'], { cwd: partial }).status, 0);
+  assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/child'], { cwd: partial }).status, 0);
+  assert.notEqual(run(['cat-file', '-e', large], { cwd: partial, extra: { GIT_NO_LAZY_FETCH: '1' } }).status, 0);
+});
+
 test('pre-push accepts a branch when the remote main moved on', { skip }, (t) => {
   const { repo, run } = setup(t);
   const other = path.join(repo, '..', 'other');

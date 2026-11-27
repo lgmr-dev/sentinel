@@ -92,11 +92,11 @@ check_utf16() {
     bom="$(git cat-file blob "$prefix$path" | head -c 2 | od -An -tx1 | tr -d ' \n' || true)"
     [[ "$bom" == fffe || "$bom" == feff ]] || continue
     if ! text="$(git cat-file blob "$prefix$path" | iconv -f UTF-16 -t UTF-8)"; then
-      fail "$2: the UTF-16 file $path cannot be read"
+      fail "$2: a UTF-16 file cannot be read; list them with git grep -l -a -e \$'^\\xff\\xfe' -e \$'^\\xfe\\xff'"
       continue
     fi
     if [[ -n "$(real_homes <<<"$text")" || -n "$(grep -oiE "$personal_mail" <<<"$text" || true)" ]]; then
-      fail "$2: the UTF-16 file $path holds a home folder path or a personal email address"
+      fail "$2: a UTF-16 file holds a home folder path or a personal email address; list them with git grep -l -a -e \$'^\\xff\\xfe' -e \$'^\\xfe\\xff'"
     fi
   done < "$listing"
   rm -f "$listing"
@@ -131,7 +131,7 @@ check_names() {
   [[ -z "$found" ]] || fail "$2: a path name holds a home folder path"
   found="$(grep -oiE "$personal_mail" <<<"$1" || true)"
   [[ -z "$found" ]] || fail "$2: a path name holds a personal email address"
-  check_addresses "$2 path name" "$1"
+  check_addresses "$2: a path name holds text that looks like an address, so rename the file or" "$1"
 }
 
 check_text() {

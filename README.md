@@ -254,6 +254,8 @@ repository and run the installer again.
   address in an author, committer, trailer, tag or branch name. It also stops on
   a home folder path in a message and on history with another root commit.
 - CI runs the same privacy check on the commits of each pull request.
+- Rebase each open branch on `main` after the hooks arrive. Git runs no hook
+  in a branch without `tools/hooks`.
 - `make check` compares the imported files with `upstream/lock.json`.
 - `make eval` runs the eval cases that your changes touch, on Opus and Sol,
   with Claude Code and Codex, in a new temporary home folder with a fresh
