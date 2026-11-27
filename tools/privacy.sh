@@ -22,19 +22,19 @@ fail() {
 
 real_homes() {
   grep -oE "$home( [[:alnum:]])?" | grep -viE "$web_url" |
-    awk '/(\\|^[A-Za-z]:).* [[:alnum:]]$/ { print "a name with a space"; next } { sub(/ [[:alnum:]]$/, ""); print }' |
+    awk '/[Uu][Ss][Ee][Rr][Ss](\\|\/).* [[:alnum:]]$/ { print "a name with a space"; next } { sub(/ [[:alnum:]]$/, ""); print }' |
     sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
 }
 
 check_signature() {
   local block found
-  block="$(sed -n -E '/-----BEGIN (SIGNED MESSAGE|PKCS7)-----/,/-----END (SIGNED MESSAGE|PKCS7)-----/p' <<<"$2" | grep -v '^-----' | tr -d ' ' || true)"
+  block="$(sed -n -E '/-----BEGIN (SIGNED MESSAGE|PKCS7|PGP SIGNATURE)-----/,/-----END (SIGNED MESSAGE|PKCS7|PGP SIGNATURE)-----/p' <<<"$2" | grep -v -e '^-----' -e '^=' -e ':' | tr -d ' ' || true)"
   [[ -n "$block" ]] || return 0
-  if ! base64 -d <<<"$block" >/dev/null 2>&1; then
+  if ! base64 --decode <<<"$block" >/dev/null 2>&1; then
     fail "$1: the signature cannot be read"
     return 0
   fi
-  found="$(base64 -d <<<"$block" | LC_ALL=C tr -c '[:print:]' '\n' | grep -oE "$email" || true)"
+  found="$(base64 --decode <<<"$block" | LC_ALL=C tr -c '[:print:]' '\n' | grep -oE "$email" || true)"
   while read -r address; do
     [[ -z "$address" ]] || check_address "$1" "$address"
   done < <(sort -u <<<"$found")
@@ -152,6 +152,7 @@ check_commit() {
       check_address "commit $short merged tag tagger" "$tagger"
     done < <(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$mergetag")
     check_text "commit $short merged tag" "$mergetag"
+    check_signature "commit $short merged tag signature" "$mergetag"
   fi
 }
 

@@ -72,6 +72,7 @@ const files = [
   ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
   ['a NetEase mailbox', addressOf('alice', '163.com'), false],
   ['a quoted Windows profile with a space', `"${['C:', 'Users', 'Bob Smith', 'x'].join('\\')}"`, false],
+  ['a Git Bash profile with a space', `"${unixPath('c', 'Users', 'Bob Smith', 'x')}"`, false],
   ['a Linux home path in prose', `the ${unixPath('home', 'alice')} folder`, false],
 ];
 for (const [name, text, passes] of files) {
@@ -250,17 +251,30 @@ test('pre-push accepts a clean push from a shallow clone', { skip }, (t) => {
   assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/feature'], { cwd: shallow }).status, 0);
 });
 
-test('pre-push checks the addresses in an S/MIME signature', { skip }, (t) => {
-  const { run } = setup(t);
-  const certificate = Buffer.from(`\u0000\u0001subject emailAddress\u0016${personal}\u0000`).toString('base64');
+function signedCommit(run, header) {
   const tree = run(['rev-parse', 'HEAD^{tree}']).stdout.trim();
   const parent = run(['rev-parse', 'HEAD']).stdout.trim();
   const now = `${Math.floor(Date.now() / 1000)} +0000`;
   const body = [`tree ${tree}`, `parent ${parent}`, `author T <${noreply}> ${now}`, `committer T <${noreply}> ${now}`,
-    'gpgsig -----BEGIN SIGNED MESSAGE-----', ` ${certificate}`, ' -----END SIGNED MESSAGE-----', '', 'signed', ''].join('\n');
-  const commit = run(['hash-object', '-t', 'commit', '-w', '--stdin'], { input: body }).stdout.trim();
-  assert.match(commit, /^[0-9a-f]{40}$/);
-  assert.notEqual(run(['push', '-q', 'origin', `${commit}:refs/heads/smime`]).status, 0);
+    ...header(parent, now), '', 'signed', ''].join('\n');
+  return run(['hash-object', '-t', 'commit', '-w', '--stdin'], { input: body }).stdout.trim();
+}
+
+const certificate = () => Buffer.from(`\u0000\u0001subject emailAddress\u0016${personal}\u0000`).toString('base64');
+
+test('pre-push checks the addresses in S/MIME and PGP signatures', { skip }, (t) => {
+  const { run } = setup(t);
+  const smime = signedCommit(run, () => ['gpgsig -----BEGIN SIGNED MESSAGE-----', ` ${certificate()}`, ' -----END SIGNED MESSAGE-----']);
+  assert.notEqual(run(['push', '-q', 'origin', `${smime}:refs/heads/smime`]).status, 0);
+  const pgp = signedCommit(run, () => ['gpgsig -----BEGIN PGP SIGNATURE-----', ' ', ` ${certificate()}`, ' =AbCd', ' -----END PGP SIGNATURE-----']);
+  assert.notEqual(run(['push', '-q', 'origin', `${pgp}:refs/heads/pgp`]).status, 0);
+});
+
+test('pre-push checks the signature of a merged tag', { skip }, (t) => {
+  const { run } = setup(t);
+  const merged = signedCommit(run, (parent, now) => [`mergetag object ${parent}`, ' type commit', ' tag v1', ` tagger T <${noreply}> ${now}`, ' ', ' release',
+    ' -----BEGIN SIGNED MESSAGE-----', ` ${certificate()}`, ' -----END SIGNED MESSAGE-----']);
+  assert.notEqual(run(['push', '-q', 'origin', `${merged}:refs/heads/merged`]).status, 0);
 });
 
 test('pre-push checks a renamed annotated tag', { skip }, (t) => {
