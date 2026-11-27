@@ -171,16 +171,20 @@ for (const [name, { message = 'x', ref = 'refs/heads/feature', ...who }, passes]
 
 const bot = addressOf('noreply', 'anthropic.com');
 const cLocale = [
-  ['a bot address in curly quotes and an HTTPS clone URL with a user', `“${bot}” and https://${addressOf('org', 'dev.azure.com')}/org/p/_git/r`],
-  ['a bot address between non-ASCII punctuation', `by —${bot}。`],
-  ['a bot address before an em dash and more text', `by ${bot}—see the notes`],
+  ['a bot address in curly quotes and an HTTPS clone URL with a user', `“${bot}” and https://${addressOf('org', 'dev.azure.com')}/org/p/_git/r`, true],
+  ['a bot address between non-ASCII punctuation', `by —${bot}。`, true],
+  ['a bot address before an em dash and more text', `by ${bot}—see the notes`, true],
+  ['a bot address before a no-break space and more text', `by ${bot}\u00a0CI`, true],
+  ['a bot address in full-width parentheses after a word', `by（${bot}）CI and by：${bot}`, true],
+  ['a personal address with an ideographic full stop in the domain', `Ask ${addressOf('alice', 'personal-isp\u3002co.uk')}`, false],
+  ['a personal address after a bot address and an em dash', `by ${bot}—${addressOf('alice', 'personal-isp.de')}`, false],
 ];
-for (const [name, message] of cLocale) {
-  test(`pre-push accepts ${name} in the C locale`, { skip }, (t) => {
+for (const [name, message, passes] of cLocale) {
+  test(`pre-push ${passes ? 'accepts' : 'stops'} ${name} in the C locale`, { skip }, (t) => {
     const { run } = setup(t);
     assert.equal(run(['commit', '-q', '--allow-empty', '-m', message]).status, 0);
     const push = run(['push', '-q', 'origin', 'HEAD:refs/heads/feature'], { extra: { LC_ALL: 'C' } });
-    assert.equal(push.status, 0, push.stderr);
+    assert.equal(push.status === 0, passes, push.stderr);
   });
 }
 
@@ -191,7 +195,7 @@ test('pre-commit ignores the files of a submodule with submodule.recurse on', { 
   fs.writeFileSync(path.join(module, 'README'), `${unixPath('home', 'alice', 'notes')}\n`);
   assert.equal(run(['add', 'README'], { cwd: module }).status, 0);
   assert.equal(run(['-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'module'], { cwd: module }).status, 0);
-  assert.equal(run(['-c', 'protocol.file.allow=always', 'submodule', '--quiet', 'add', module, 'module']).status, 0);
+  assert.equal(run(['-c', 'protocol.file.allow=always', 'submodule', '--quiet', 'add', '../module', 'module']).status, 0);
   write('f.txt', 'clean\n');
   const commit = run(['-c', 'submodule.recurse=true', 'commit', '-q', '-m', 'module']);
   assert.equal(commit.status, 0, commit.stderr);
