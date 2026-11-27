@@ -10,7 +10,7 @@ web_url='^https?://[^/]'
 synthetic_homes='^$'
 email='[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
 ssh_remote='(^|[^A-Za-z0-9._%+-])git@[A-Za-z0-9.-]+(:|/)[A-Za-z0-9._~/-]+'
-personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota|tuta)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
+personal_mail='[A-Za-z0-9._%+-]+@(gmail|googlemail|mail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|gmx|web|proton|protonmail|pm|yandex|uol|bol|terra|zoho|fastmail|tutanota|tuta|163|126|yeah|qq|foxmail|sina|naver|hanmail|daum|seznam|libero|orange|wanadoo|laposte|t-online|rediffmail|rocketmail|comcast|verizon|btinternet|bigpond)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
 public_address='^([^@[:space:]]+@users\.noreply\.(github|gitlab)\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@([a-z0-9-]+\.)*example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
 not_address='@(v?[0-9]+\.[0-9]|[0-9]+x\.|[A-Za-z0-9_.-]+\.(service|socket|timer|target|mount|path|slice|scope|device|swap|automount)$)'
 status=0
@@ -21,7 +21,23 @@ fail() {
 }
 
 real_homes() {
-  grep -oE "$home" | grep -viE "$web_url" | sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
+  grep -oE "$home( [[:alnum:]])?" | grep -viE "$web_url" |
+    awk '/(\\|^[A-Za-z]:).* [[:alnum:]]$/ { print "a name with a space"; next } { sub(/ [[:alnum:]]$/, ""); print }' |
+    sed -E 's#.*[/\\]##; s#[.]+$##' | grep -vixE "$synthetic_homes" || true
+}
+
+check_signature() {
+  local block found
+  block="$(sed -n -E '/-----BEGIN (SIGNED MESSAGE|PKCS7)-----/,/-----END (SIGNED MESSAGE|PKCS7)-----/p' <<<"$2" | grep -v '^-----' | tr -d ' ' || true)"
+  [[ -n "$block" ]] || return 0
+  if ! base64 -d <<<"$block" >/dev/null 2>&1; then
+    fail "$1: the signature cannot be read"
+    return 0
+  fi
+  found="$(base64 -d <<<"$block" | LC_ALL=C tr -c '[:print:]' '\n' | grep -oE "$email" || true)"
+  while read -r address; do
+    [[ -z "$address" ]] || check_address "$1" "$address"
+  done < <(sort -u <<<"$found")
 }
 
 grep_tree() {
@@ -129,6 +145,7 @@ check_commit() {
   check_address "commit $short committer" "$(git log -1 --no-show-signature --format=%ce "$commit")"
   check_text "commit $short identity names" "$(git log -1 --no-show-signature --format='%an%n%cn' "$commit")"
   check_text "commit $short message" "$(git log -1 --no-show-signature --format=%B "$commit")"
+  check_signature "commit $short signature" "$(git cat-file commit "$commit" | awk '/^$/ { exit } /^gpgsig(-sha256)? / { sig = 1; sub(/^gpgsig(-sha256)? /, ""); print; next } /^ / { if (sig) { sub(/^ /, ""); print }; next } { sig = 0 }')"
   mergetag="$(git cat-file commit "$commit" | awk '/^$/ { exit } /^mergetag / { tag = 1; sub(/^mergetag /, ""); print; next } /^ / { if (tag) { sub(/^ /, ""); print }; next } { tag = 0 }')"
   if [[ -n "$mergetag" ]]; then
     while IFS= read -r tagger; do
@@ -161,6 +178,7 @@ case "${1:-index}" in
     check_address "tag ${2:0:12} tagger" "$(sed -n 's/^tagger .*<\(.*\)> .*/\1/p' <<<"$header")"
     check_text "tag ${2:0:12} header" "$(sed -n 's/^tag //p; s/^tagger \(.*\) <.*/\1/p' <<<"$header")"
     check_text "tag ${2:0:12} message" "$(sed '1,/^$/d' <<<"$tag")"
+    check_signature "tag ${2:0:12} signature" "$tag"
     ;;
   ref)
     check_addresses "ref name" "$2"

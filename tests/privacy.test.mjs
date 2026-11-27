@@ -70,6 +70,8 @@ const files = [
   ['a web URL with a home-like path', 'https://github.com/o/r/blob/main/portable/root/README', true],
   ['test data with an address', addressOf('a', 'x.io'), true],
   ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
+  ['a NetEase mailbox', addressOf('alice', '163.com'), false],
+  ['a quoted Windows profile with a space', `"${['C:', 'Users', 'Bob Smith', 'x'].join('\\')}"`, false],
 ];
 for (const [name, text, passes] of files) {
   test(`pre-commit ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {
@@ -245,6 +247,19 @@ test('pre-push accepts a clean push from a shallow clone', { skip }, (t) => {
   run(['config', 'core.hooksPath', 'tools/hooks'], { cwd: shallow });
   assert.equal(run(['commit', '-q', '--allow-empty', '-m', 'feature'], { cwd: shallow }).status, 0);
   assert.equal(run(['push', '-q', 'origin', 'HEAD:refs/heads/feature'], { cwd: shallow }).status, 0);
+});
+
+test('pre-push checks the addresses in an S/MIME signature', { skip }, (t) => {
+  const { run } = setup(t);
+  const certificate = Buffer.from(`\u0000\u0001subject emailAddress\u0016${personal}\u0000`).toString('base64');
+  const tree = run(['rev-parse', 'HEAD^{tree}']).stdout.trim();
+  const parent = run(['rev-parse', 'HEAD']).stdout.trim();
+  const now = `${Math.floor(Date.now() / 1000)} +0000`;
+  const body = [`tree ${tree}`, `parent ${parent}`, `author T <${noreply}> ${now}`, `committer T <${noreply}> ${now}`,
+    'gpgsig -----BEGIN SIGNED MESSAGE-----', ` ${certificate}`, ' -----END SIGNED MESSAGE-----', '', 'signed', ''].join('\n');
+  const commit = run(['hash-object', '-t', 'commit', '-w', '--stdin'], { input: body }).stdout.trim();
+  assert.match(commit, /^[0-9a-f]{40}$/);
+  assert.notEqual(run(['push', '-q', 'origin', `${commit}:refs/heads/smime`]).status, 0);
 });
 
 test('pre-push checks a renamed annotated tag', { skip }, (t) => {
