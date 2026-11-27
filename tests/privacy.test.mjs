@@ -72,6 +72,7 @@ const files = [
   ['a Tuta mailbox', addressOf('alice', 'tuta.com'), false],
   ['a NetEase mailbox', addressOf('alice', '163.com'), false],
   ['a quoted Windows profile with a space', `"${['C:', 'Users', 'Bob Smith', 'x'].join('\\')}"`, false],
+  ['a Linux home path in prose', `the ${unixPath('home', 'alice')} folder`, false],
 ];
 for (const [name, text, passes] of files) {
   test(`pre-commit ${passes ? 'accepts' : 'stops'} ${name}`, { skip }, (t) => {

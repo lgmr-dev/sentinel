@@ -59,7 +59,7 @@ check_files() {
   [[ "$1" == index ]] && where=--cached
   list="git grep -nE -e $(printf '%q' "$home") $where"
   mail="git grep -niE -e $(printf '%q' "$personal_mail") $where"
-  found="$(grep_tree "$1" "$home" | real_homes)"
+  found="$(grep_tree "$1" "$home( [[:alnum:]])?" | real_homes)"
   [[ -z "$found" ]] || fail "$2: a file holds a home folder path; list them with $list"
   found="$(grep_tree "$1" "$personal_mail" any-case)"
   [[ -z "$found" ]] || fail "$2: a file holds a personal email address; list them with $mail"
