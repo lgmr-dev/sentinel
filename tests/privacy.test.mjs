@@ -155,6 +155,8 @@ const pushes = [
   ['an upper-case noreply domain', { as: addressOf('1+a', 'USERS.NOREPLY.GITHUB.COM') }, true],
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
   ['a personal address in the author name', { extra: { GIT_AUTHOR_NAME: `A ${personal}` } }, false],
+  ['a personal author domain that starts with a bot domain', { as: `${addressOf('noreply', 'anthropic.com')}ü.personal-isp.de` }, false],
+  ['an author field with a public and a personal address', { as: `${noreply} ${personal}` }, false],
   ['a bare upper-case sign-off', { message: `x\n\nSIGNED-OFF-BY: ${personal}` }, false],
   ['a personal address with a Unicode domain', { message: `Ask ${addressOf('alice', 'gmüx.example-isp.de')} for details` }, false],
   ['a personal address with a Unicode local part', { message: `Ask ${addressOf('josé', 'personal-isp.de')}` }, false],
@@ -178,6 +180,7 @@ const cLocale = [
   ['a bot address in full-width parentheses after a word', `by（${bot}）CI and by：${bot}`, true],
   ['a personal address with an ideographic full stop in the domain', `Ask ${addressOf('alice', 'personal-isp\u3002co.uk')}`, false],
   ['a personal address after a bot address and an em dash', `by ${bot}—${addressOf('alice', 'personal-isp.de')}`, false],
+  ['a personal domain that starts with a bot domain', `Ask ${bot}ü.personal-isp.de`, false],
 ];
 for (const [name, message, passes] of cLocale) {
   test(`pre-push ${passes ? 'accepts' : 'stops'} ${name} in the C locale`, { skip }, (t) => {

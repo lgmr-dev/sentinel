@@ -112,10 +112,18 @@ check_links() {
 }
 
 check_address() {
-  local address ascii
+  local address
   address="$(tr '[:upper:]' '[:lower:]' <<<"$2")"
-  ascii="$(LC_ALL=C tr -c '@!-~' '\n' <<<"$address" | grep @ || true)"
-  [[ "$address" =~ $public_address || "$ascii" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
+  [[ "$address" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
+}
+
+check_text_address() {
+  local ascii
+  ascii="$(LC_ALL=C tr -c '@!-~' '\n' <<<"$2" | grep @ || true)"
+  if [[ "${2#*"$ascii"}" != *.* && "$(tr '[:upper:]' '[:lower:]' <<<"$ascii")" =~ $public_address ]]; then
+    return 0
+  fi
+  check_address "$1" "$2"
 }
 
 check_addresses() {
@@ -124,7 +132,7 @@ check_addresses() {
   addresses="$({ grep -oE "$email" <<<"$text"; LC_ALL=C tr -c '\n -~' ' ' <<<"$text" | grep -oE "$email"; } | grep -viE "$not_address" || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
   while read -r found; do
-    [[ -z "$found" ]] || check_address "$name" "$found"
+    [[ -z "$found" ]] || check_text_address "$name" "$found"
   done < <(sort -u <<<"$addresses")
   return 0
 }
