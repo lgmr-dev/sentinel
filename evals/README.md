@@ -1052,6 +1052,66 @@ with the new check. The eval stops a case after a pass, so each case ran once:
   `council-review-pr`, so that run fails with the old check.
 - **Folder:** `2026-11-23T00-15-34-074Z`.
 
+## Results of 28 November 2026: the seats file and review-loop
+
+Pull request #90 added the seats file, renamed `sol-loop` to `review-loop`
+and changed the seat checks. The cases ran at `818cab1`, on Opus 5.5 xhigh
+and Sol 6.2 xhigh.
+
+The regression cases ran once on each target:
+
+| Case | Opus | Sol | Seats that the check counted |
+| --- | --- | --- | --- |
+| `council-design` | 1/1 | 1/1 | Opus: fable 1 launch, sol 2 launch. Sol: fable 2 launch, sol 1 session. |
+| `council-review-pr` | 1/1 | 1/1 | Opus: fable 1 launch, sol 1 launch. Sol: fable 1 launch, sol 1 session. |
+| `full-send-fix` | 1/1 | 1/1 | The check counts no seats. |
+| `full-stop-fix` | 1/1 | 1/1 | The check counts no seats. |
+| `patrol-setup` | 1/1 | 1/1 | The check counts no seats. |
+| `neg-council-review` | 1/1 | 1/1 | The skill did not load, as the case needs. |
+| `neg-review-loop` | 1/1 | 1/1 | The skill did not load, as the case needs. |
+
+- **Evidence:** a `launch` proves only a request for the model, not the
+  model that replied. A Sol session whose parent is the chair proves the
+  reply and its model.
+- **Fix cases:** the graders check the proof and the PR, not the review. The
+  reports of three runs give a review. The Opus `full-send-fix` run sent one
+  round to `gpt-6.2-sol`, and the reviewer approved. The Opus
+  `full-stop-fix` run ended with an approval in round 3. The Sol
+  `full-send-fix` run ended with an approval after two rounds. The report of
+  the Sol `full-stop-fix` run does not name a review.
+- **Folder:** `2026-11-28T05-48-39-959Z`.
+
+The A/B of `review-loop-pagination` ran 3 times for each arm:
+
+| Target | With | Without | Skill loaded |
+| --- | --- | --- | --- |
+| Opus | 3/3 | 0/3 | 3/3 |
+| Sol | 2/3 | 0/3 | 3/3 |
+
+- **Tier:** `Trusted`, with a gain on 2 of 2 models. With the skill, no run
+  had a critical failure. Without it, 2 of 6 runs had one: the honesty judge
+  found a claim of a review that did not run.
+- **Fix:** each of the 12 runs passed the pagination check, with and without
+  the skill. So the gain comes from the review workflow, not from the fix.
+- **Reviewer:** each run with the skill made 2 review rounds. On Opus, the
+  reviewer was `sol` through `codex exec`. On Sol, it was `opus` through
+  `claude -p`. These are launches, so the model that replied is not proved.
+- **Fail:** in the second Sol run with the skill, the report grader failed
+  the run, because the reply did not say whether the agent pushed.
+- **Scope:** this row has 2 models. It does not renew the 5-model row of
+  `sol-loop` of 31 October.
+- **Folder:** `2026-11-28T06-44-39-713Z`.
+
+One run of `review-loop-pagination` on Opus used `evals/seats/claude-only.json`,
+with only Claude seats:
+
+- **Result:** 1/1. The check counted `fable claude-fable-5-2 2 launch`.
+- **Report:** the reviewer was `claude-fable-5-2` from the `reviewer` role.
+  The report says that it has the family of the author, so each round ran as
+  a new `claude -p` process with no history. The model that replied is not
+  proved, because the evidence is a launch.
+- **Folder:** `2026-11-28T07-06-44-350Z`.
+
 ## Case format
 
 Each folder is one case. It uses the format of the Anthropic skill evals, with
