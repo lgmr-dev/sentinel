@@ -11,22 +11,68 @@ fixes until reviews return. If the user wants to discard the implementation
 and explore new ideas, skip fixes to code being replaced.
 
 Bring in delegates to help with the user's request, usually for review or
-feedback. By default, use Claude Fable 5.2 (`claude-fable-5-2`), GPT-6.2 Sol
-(`gpt-6.2-sol`) and Muse Wonder Full (`muse-wonder-full-1.0`), one seat each,
-at high reasoning effort. Start a delegate for each seat, also
-for the model that you run on. If the user names members, use only those, one
-seat each. If the user asks for more seats than members, fill the extra seats
+feedback. By default, take the members of the `council` role of the seats
+file, one seat each:
+
+```sh
+node <this skill folder>/scripts/seat.mjs resolve council
+```
+
+It prints a JSON list in order. Each seat has `name`, `provider`, `model`,
+`effort` and `source`, and `track` and `family` when the entry has them.
+`seats.json` in this folder holds the defaults. The user file
+`$XDG_CONFIG_HOME/sentinel/seats.json`, or `~/.config/sentinel/seats.json`,
+changes them. If `seat.mjs` exits with an error, or if `node` does not run,
+report the message. Do not guess the seats. Start a delegate for each seat,
+also for the model that you run on.
+
+If the user names members, use only those, one seat each:
+
+- When the user gives an exact model ID, use that ID. When the user also gives
+  a seat name of the seats file, take the other fields from that entry.
+- When the user gives only a seat name of the seats file, such as "Fable" for
+  `fable`, take the entry from `seat.mjs resolve council --names <name>,<name>`.
+- When the user gives neither, report that seat and start no model for it. Do
+  not guess an ID. An ID that the model list of the route gives for that name
+  is not a guess.
+
+If the user asks for more seats than members, fill the extra seats
 with copies, in the order of the user's list. If the user asks for fewer seats
-and names no members, use the first defaults in the order above. Report a
-member that you cannot reach. If you can reach only one model family, report
-it. Do not substitute a model.
+and names no members, use the first seats that `seat.mjs` prints. Use only
+these members. Report a member that you cannot reach, and a seat that started
+and did not reply. Do not replace that seat. If you can reach only one model
+family, report it. Do not substitute a model.
+
+When the route lists its models, give them to `seat.mjs` with one
+`--available <provider>=<id>,<id>...` for each provider. Use the `provider`
+value of the seats file, such as `claude` for the T3 provider `claudeAgent`.
+A seat with `track` then takes the newest listed ID that matches its `track`,
+and its `source` is `track`. Without a list or a match, it keeps its `model`,
+and its `source` is `model`.
+
+- In T3 Code, use the IDs of the one `orchestrator_capabilities` call that the
+  host lets you make before the first `delegate_task`. The T3 list is short.
+  When it leaves out the newest model, the seat takes the newest listed model.
+- In Codex, the native subagent route and `codex exec` take the `slug` of each
+  model with `visibility` `list`. This command prints them as a comma list:
+
+  ```sh
+  codex debug models | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).models.filter(m=>m.visibility==="list").map(m=>m.slug).join(",")))'
+  ```
+
+Start each pinned ID, each ID that the user named and each ID with
+`source: model` with no list check. When the start fails, report the seat and
+start no other model in its place. Report the ID and the `source` of each seat.
 
 In T3 Code, use `orchestrator_capabilities` to resolve the models, then
 `delegate_task` to start one delegate per seat in parallel. Elsewhere, use
-the harness's subagent tools when they can run the model. Otherwise start each
-delegate as a background command with a CLI that runs the model. Set the
-`<effort>` of each seat to `high`, unless the user names another effort for
-that seat or for all seats:
+the harness's subagent tools when they can select the exact ID. A Claude Code
+subagent takes only an alias, so give the ID of a Claude seat to
+`claude -p --model`. Otherwise start each delegate as a background command
+with a CLI that runs the model. Set the `<effort>` of each seat to its
+`effort`. An effort that the user names for all seats replaces the effort of
+each seat. An effort that the user names for one seat replaces only the effort
+of that seat:
 
 | CLI | Read-only command |
 | --- | --- |
@@ -66,9 +112,9 @@ Rounds: 2
 
 | Delegate | Round 1 | Round 2 |
 | --- | --- | --- |
-| Claude Fable 5.2 | 7/10 | 9/10 |
-| GPT-6.2 Sol | 8/10 | 10/10 |
-| Muse Wonder Full | 6/10 | 9/10 |
+| <model of seat 1> | 7/10 | 9/10 |
+| <model of seat 2> | 8/10 | 10/10 |
+| <model of seat 3> | 6/10 | 9/10 |
 ```
 
 If a delegate gives no score, write `no score`. Do not invent one.
@@ -95,10 +141,13 @@ approach, or says "arena".
    delegate the task, not the criteria.
 2. Each delegate writes its own plan, read-only. Delegates do not see the
    other plans.
-3. Start one judge from a model family other than yours. Give it the criteria
-   and the plans, with labels such as "Plan A" and no model names. It scores
-   each plan against each criterion. If the user named the members and none of
-   them is from another family, do not start a judge, and say so.
+3. Take one judge from the seats of the run, after the members and the seat
+   count of the request apply. The judge is a seat with a `family` other than
+   yours: `claude` for a Claude model, `gpt` for a GPT model and `muse` for a
+   Muse model. A seat with no `family` is not of another family. Give the
+   judge the criteria and the plans, with labels such as "Plan A" and no model
+   names. It scores each plan against each criterion. If no seat has another
+   family, do not start a judge, and say so.
 4. Read each plan in full and score it yourself. If you and the judge pick
    different plans, read both reasons before you decide.
 5. Take the best plan as the base. Add the strong parts of the other plans to

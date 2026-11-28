@@ -8,16 +8,20 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { events, executions } from '../evals/lib.mjs';
 import { trustTable, failureList } from './trust.mjs';
+import { mergeSeats } from '../skills/council/scripts/seat.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const evalsDir = path.join(root, 'evals');
 const hostVars = ['CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'COPILOT_HOME', 'KIRO_HOME', 'XDG_CONFIG_HOME', 'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY', 'CODEX_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'META_API_KEY'];
+const seatRoles = { council: 'council', 'review-loop': 'reviewer' };
+const loggedClis = ['claude', 'codex', 'muse'];
+const canonical = value => JSON.stringify(value, (key, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
 const verdictSchema = { type: 'object', additionalProperties: false, required: ['pass', 'reason'],
   properties: { pass: { type: 'boolean' }, reason: { type: 'string' } } };
 
 function options(argv) {
-  const opts = { runs: 3, jobs: 4, base: 'origin/main', earlyStop: true, keep: false, targets: null, cases: null, judges: null, ab: false, arms: null, rejudge: null, resume: null };
+  const opts = { runs: 3, jobs: 4, base: 'origin/main', earlyStop: true, keep: false, targets: null, cases: null, judges: null, ab: false, arms: null, rejudge: null, resume: null, seats: null };
   for (let i = 0; i < argv.length; i++) {
     const [flag, value] = [argv[i], argv[i + 1]];
     if (flag === '--targets') { opts.targets = value.split(','); i++; }
@@ -32,6 +36,7 @@ function options(argv) {
     else if (flag === '--arms') { opts.arms = value.split(','); i++; }
     else if (flag === '--rejudge') { opts.rejudge = value; i++; }
     else if (flag === '--resume') { opts.resume = value; i++; }
+    else if (flag === '--seats') { opts.seats = value; i++; }
     else throw new Error(`Unknown option: ${flag}`);
   }
   if (opts.arms && (!opts.ab || opts.arms.some(arm => arm !== 'with' && arm !== 'without'))) throw new Error('--arms needs --ab and takes with, without or both');
@@ -170,12 +175,11 @@ async function sandbox(auth) {
   if (auth.muse) {
     await fs.mkdir(path.join(home, '.config', 'muse'));
     await fs.writeFile(path.join(home, '.config', 'muse', 'auth.json'), auth.muse, { mode: 0o600 });
-    await fs.writeFile(path.join(tmp, 'muse-login'), '');
   }
   // Apps reach the real accounts of the Codex login, such as GitHub.
   await fs.writeFile(path.join(home, '.codex', 'config.toml'), '[features]\napps = false\n');
   const clis = {};
-  for (const cli of ['claude', 'codex', 'muse']) {
+  for (const cli of loggedClis) {
     clis[cli] = spawnSync('sh', ['-c', `command -v ${cli}`], { encoding: 'utf8' }).stdout.trim();
     if (clis[cli]) await fs.writeFile(path.join(bin, cli), launchLogger(cli, clis[cli], path.join(tmp, 'launches.jsonl')), { mode: 0o755 });
   }
@@ -217,6 +221,10 @@ async function prepare(testCase, target, arm, box, baseRules) {
   }
   const install = spawnSync(path.join(root, 'tools/install'), ['--global', '--hosts', target.host, '--skills', allProfiles], { env: box.env, encoding: 'utf8' });
   if (install.status !== 0) throw new Error(`install failed: ${install.stderr}`);
+  if (testCase.seatsWritten) {
+    await fs.mkdir(path.join(box.home, '.config', 'sentinel'), { recursive: true });
+    await fs.writeFile(path.join(box.home, '.config', 'sentinel', 'seats.json'), `${JSON.stringify(testCase.runSeats, null, 2)}\n`);
+  }
   if (arm === 'with' && testCase.output_style) await fs.writeFile(path.join(box.home, '.claude/settings.json'), `${JSON.stringify({ outputStyle: testCase.output_style })}\n`);
   const skills = target.host === 'claude' ? path.join(box.home, '.claude/skills') : path.join(box.home, '.agents/skills');
   const rulesFile = target.host === 'claude' ? path.join(box.home, '.claude/CLAUDE.md') : path.join(box.home, '.codex/AGENTS.md');
@@ -348,12 +356,19 @@ async function archive(box, file, auth) {
   spawnSync('tar', ['-czf', file, '-C', box.tmp, ...leaks.flatMap(rel => ['--exclude', `./${rel}`, '--exclude', rel]), ...kept]);
 }
 
-async function grade(ctx, testCase, target, { box, head, diff, finalFile, traceFile, out, final, traceError, timedOut, skillLoaded }) {
+async function grade(ctx, testCase, target, { box, head, diff, finalFile, traceFile, out, final, traceError, timedOut, skillLoaded, seats }) {
   let checks = [];
   if (existsSync(path.join(testCase.dir, 'check.mjs'))) {
-    const check = spawnSync('node', [path.join(testCase.dir, 'check.mjs')], { cwd: testCase.dir, encoding: 'utf8', timeout: (testCase.check_timeout ?? 300) * 1000,
-      env: { ...box.env, EVAL_WORK: box.work, EVAL_FINAL: finalFile, EVAL_TRACE: traceFile, EVAL_HOME: box.home, EVAL_TMP: box.tmp, EVAL_HOST: target.host, EVAL_HEAD: head } });
-    try { checks = JSON.parse(check.stdout).checks; } catch { checks = [{ name: 'check.mjs', pass: false, detail: (check.stderr || check.stdout).slice(0, 500) }]; }
+    const seatsHome = await fs.mkdtemp(path.join(os.tmpdir(), 'sentinel-seats-'));
+    try {
+      if (seats) {
+        await fs.mkdir(path.join(seatsHome, 'sentinel'));
+        await fs.writeFile(path.join(seatsHome, 'sentinel', 'seats.json'), JSON.stringify(seats));
+      }
+      const check = spawnSync('node', [path.join(testCase.dir, 'check.mjs')], { cwd: testCase.dir, encoding: 'utf8', timeout: (testCase.check_timeout ?? 300) * 1000,
+        env: { ...box.env, EVAL_WORK: box.work, EVAL_FINAL: finalFile, EVAL_TRACE: traceFile, EVAL_HOME: box.home, EVAL_TMP: box.tmp, EVAL_HOST: target.host, EVAL_HEAD: head, EVAL_SEATS_HOME: seatsHome } });
+      try { checks = JSON.parse(check.stdout).checks; } catch { checks = [{ name: 'check.mjs', pass: false, detail: (check.stderr || check.stdout).slice(0, 500) }]; }
+    } finally { await fs.rm(seatsHome, { recursive: true, force: true }); }
   }
   const runs = testCase.judge_trace ? executions(out).map(r => `$ ${r.command.slice(0, 600)}\n${r.output.slice(0, 3000)}`).join('\n\n').slice(-20000) : '';
   const posted = path.join(box.tmp, 'bodies.jsonl');
@@ -400,10 +415,10 @@ async function trial(ctx, testCase, target, arm, index) {
     const diff = head ? spawnSync('git', ['diff', head], { cwd: box.work, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout : '';
     const skillLoaded = testCase.skill ? loaded(testCase.skill, agent.out) : null;
     const { checks, judged, error, pass, status } = await grade(ctx, testCase, target, { box, head, diff, finalFile, traceFile, out: agent.out,
-      final: trace.final, traceError: trace.error, timedOut: agent.timedOut, skillLoaded });
+      final: trace.final, traceError: trace.error, timedOut: agent.timedOut, skillLoaded, seats: testCase.runSeats });
     const record = { case: testCase.name, target: target.id, host: target.host, model: target.model, model_seen: trace.model, effort: target.effort,
       arm, index, status, pass, skill_loaded: skillLoaded, timed_out: agent.timedOut, error, checks, judged,
-      usage: trace.usage, seconds: Math.round((Date.now() - started) / 1000), head, sandbox: box.tmp };
+      usage: trace.usage, seconds: Math.round((Date.now() - started) / 1000), head, sandbox: box.tmp, seats: testCase.runSeats, seats_written: testCase.seatsWritten };
     await fs.writeFile(path.join(outDir, 'diff.patch'), diff);
     await archive(box, path.join(outDir, 'sandbox.tgz'), ctx.auth());
     await fs.writeFile(path.join(outDir, 'result.json'), `${JSON.stringify(record, null, 2)}\n`);
@@ -457,6 +472,16 @@ async function main() {
     if (!cases.length) { console.log(`No case covers the changes since ${opts.base}. Use --case or --ab.`); return; }
   }
   if (!cases.some(testCase => targetsFor(testCase).length)) throw new Error('No targets selected');
+  const defaultSeats = JSON.parse(readFileSync(path.join(root, 'skills/council/seats.json'), 'utf8'));
+  const seatsFlag = opts.seats && JSON.parse(readFileSync(opts.seats, 'utf8'));
+  for (const testCase of cases) {
+    const given = seatsFlag ?? testCase.seats;
+    Object.assign(testCase, { runSeats: mergeSeats(defaultSeats, given), seatsWritten: !!given });
+    for (const name of testCase.runSeats.roles[seatRoles[testCase.skill]] ?? []) {
+      const provider = testCase.runSeats.models[name]?.provider;
+      if (!loggedClis.includes(provider)) throw new Error(`${testCase.name}: the seat ${name} has the provider ${provider}, but the runner logs only ${loggedClis.join(', ')}`);
+    }
+  }
   const rulesAt = new Map();
   const baseRulesFor = testCase => {
     const ref = testCase.base ?? opts.base;
@@ -475,7 +500,11 @@ async function main() {
   const ctx = { results, baseRulesFor, judgesFor, keep: opts.keep, auth: () => ({ claude: claudeToken(), codex: codexAuth(), muse: museAuth() }) };
   ctx.auth();
   const limit = semaphore(opts.jobs);
-  const run = async (testCase, target, arm, index) => done.get(`${testCase.name} ${target.id} ${arm} ${index}`) ?? limit(() => trial(ctx, testCase, target, arm, index));
+  const run = async (testCase, target, arm, index) => {
+    const old = done.get(`${testCase.name} ${target.id} ${arm} ${index}`);
+    const same = old && canonical(old.seats) === canonical(testCase.runSeats) && old.seats_written === testCase.seatsWritten;
+    return same ? old : limit(() => trial(ctx, testCase, target, arm, index));
+  };
   const records = [];
   const log = async record => {
     records.push(record);
@@ -548,7 +577,7 @@ async function rejudge(opts, judgesFor, config) {
       await fs.writeFile(finalFile, final);
       const traceError = old.error && !/^judge error/.test(old.error) ? old.error : null;
       const graded = await grade(ctx, testCase, target, { box, head: old.head, diff: await fs.readFile(path.join(dir, 'diff.patch'), 'utf8'), finalFile, traceFile,
-        out, final, traceError, timedOut: old.timed_out, skillLoaded: old.skill_loaded });
+        out, final, traceError, timedOut: old.timed_out, skillLoaded: old.skill_loaded, seats: old.seats });
       const record = { ...old, ...graded, rejudged_from: path.relative(root, artifacts) };
       records.push(record);
       await fs.appendFile(path.join(results, 'runs.jsonl'), `${JSON.stringify(record)}\n`);

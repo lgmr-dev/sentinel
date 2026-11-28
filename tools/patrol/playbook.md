@@ -32,7 +32,9 @@ These rules take precedence over the rules of each skill that you run.
   `"status":"now"` at the start of a step, and while the step continues.
 - Before each council round, run `P record --run <id> --calls 1`.
 - Each council round uses the council skill with the seats that `start` gives.
-  Name each seat by its model and effort, one seat each. A seat that does not
+  Name each seat by its model and effort, one seat each. Also give the
+  `provider` of the seat when its entry has one. For an entry with no
+  `provider`, the council skill finds the route. A seat that does not
   answer ends the run as `Incomplete`. No other model replaces a seat.
 - A council score counts only with its evidence: a command, a file and line,
   or a test.

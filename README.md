@@ -135,8 +135,8 @@ agent can also load each skill when its description fits the task.
 |---|---|---|
 | `full-send` | "full send" | The agent does the work, proves it, files the pull request and merges it when the checks of the branch protection pass. |
 | `full-stop` | "full stop" | The agent stops when the pull request is ready for you to merge. |
-| `review-loop` | "review loop" or "sol loop" | GPT Sol reviews the change in a loop until both agents agree. |
-| `council` | "council" | Claude Fable 5.2, GPT-6.2 Sol and Muse Wonder Full review until they agree, for 3 rounds by default. Each model runs at high effort by default. Name fewer seats, other models, efforts or limits in the request. |
+| `review-loop` | "review loop" or "sol loop" | A reviewer from the `reviewer` role of the seats file reviews the change in a loop until both agents agree. A model of another family goes first. |
+| `council` | "council" | The seats of the `council` role review until they agree, for 3 rounds by default. The default seats are `fable`, `sol` and `muse`, each at high effort. Name fewer seats, other models, efforts or limits in the request. |
 | `council` | "arena", or a design request to the council | Each model writes its own plan. A judge scores the plans without model names. The agent merges the best parts into one plan. |
 | `file-pr` | "file a PR" | The agent files a short pull request. |
 | `babysit-pr` | "babysit" | The agent watches CI and review bots and fixes real findings. |
@@ -148,6 +148,10 @@ agent can also load each skill when its description fits the task.
 | `no-comments` | "remove the comments" | The agent removes comments that code can replace, and keeps the others with a reason. |
 | `tldr` | "tldr" | A short version that keeps each fact that you need to decide or act. |
 | `technical-writing` | "simplify this", "STE" | Docs, PR text and rewrites in simple technical English, without AI patterns. |
+
+`skills/council/seats.json` holds the default seats and roles.
+`council` and `review-loop` read them with `skills/council/scripts/seat.mjs`.
+So these two skills, and the `core` profile, need Node 22 or later.
 
 At xhigh, `council`, `cleanup`, `no-comments`, `review-loop` (as `sol-loop`,
 31 October 2026), `technical-writing` and the rules for comments and cleanup
@@ -236,7 +240,8 @@ run reads only the playbook. Do these steps in this order:
 4. If the `patrol.json` of the repository names a seat that the host seats
    file does not define, add the entry. Patrol reads only the host file. The
    Patrol of Sentinel now names the seat `sol`. Without a `sol` entry, `start`
-   gives "the seat sol is not in seats.json".
+   gives "the seat sol is not in seats.json". Add `track` to each entry that
+   must follow its line. An entry with `model` and no `track` is a pin.
 5. Start the scheduled task again.
 
 ## Known limits

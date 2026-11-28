@@ -28,7 +28,7 @@
       "source": "tstack",
       "path": "skills/council/SKILL.md",
       "sha256": "91cab56e85ca2ce2920961b50931573890e0513adbc5a60b33969b1e2501251c",
-      "local": "f2536f0553855d72e5db54aa7ebb04aae1d47c58e4e3012832ea0500a6f5f01a",
+      "local": "cd2b6e81f23e3512f200c218780a5f03601cbd3471f6a99449f32b2be3b68fde",
       "executable": false
     },
     "skills/file-pr/SKILL.md": {
@@ -94,7 +94,7 @@
       "source": "tstack",
       "path": "skills/sol-loop/SKILL.md",
       "sha256": "1db1eb4c4a156ee666070e9a12623d520cd1bd9b19c3fc21003fe5a440ba0b10",
-      "local": "db0237515dd8b7c23287c3b23db61cda6e02400698f476e60ca6b8b80fdda567",
+      "local": "cd7d9043deb764027c3a5450b8c939f1708e1953d070d9e55f162dbec686c7f1",
       "executable": false
     },
     "skills/full-stop/full-send.md": {

@@ -11,7 +11,8 @@ how badly it can fail.
 | `make eval ARGS="--case <name>"` | The same check for the named cases. |
 | `make eval ARGS="--ab"` | A/B. Each case runs **with** and **without** its skill or rule, on the 5 default models, with both judges. It prints the trust table. Use it for a new or removed skill, a rewrite of a skill, or a new or removed rules section. |
 | `make eval ARGS="--ab --arms without"` | An A/B that runs only the named arm. The **without** arm does not change with the skill, so a climb can run it once and join its `runs.jsonl` with the runs of each new skill text. Put both arms in one folder for `tools/trust.mjs`, because it keeps only the last folder for each case and target. |
-| `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
+| `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. It copies a row only when its saved `seats` and `seats_written` are the same as those of the new run. Each row saves the merged seats, so a change of the default seats that changes them runs the row again. A row with no saved seats runs again. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
+| `make eval ARGS="--case <name> --seats <file>"` | Uses the seats file for each case of this run, in place of the `seats` field of the case. |
 | `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. |
 | `node tools/trust.mjs <results folder>...` | Prints the trust table of saved A/B runs. |
 
@@ -21,9 +22,23 @@ the target row of that model in `targets.json`. A model with no target row gets
 no judge. When the rejudge keeps no judge, it picks the judges as a new run
 does.
 
-The council checks of a rejudge read the seat models from the current council
-skill. So a council run from before a change of the seats counts 0 seats for
-each changed model.
+Before a run starts, the runner merges the `seats` field of the case, or the
+file of `--seats`, over `skills/council/seats.json` of the checkout. It uses the
+merge of `skills/council/scripts/seat.mjs`. Each row saves the merged file in
+`seats`, and `seats_written` tells if the runner wrote it. The runner writes
+the file to `home/.config/sentinel/seats.json` in the sandbox only when the
+case or `--seats` gives seats. Other cases keep a clean host.
+
+The runner logs only the `claude`, `codex` and `muse` CLIs. So it stops with an
+error before the first launch when a member of the role of the case has
+another `provider`. The role of a `council` case is `council`, and the role of
+a `review-loop` case is `reviewer`.
+
+The seat checks read the saved seats of the row, also in a rejudge. They do
+not read the host file of the sandbox, because the agent can change it. A row
+from before this change has no saved seats, so its checks use the current
+defaults. Such a row can come from other seats, and its seat check can then
+fail.
 
 In an A/B run, the arms are:
 
@@ -1044,7 +1059,7 @@ some files of our own:
 | --- | --- |
 | `prompt.md` | The task that the agent gets. |
 | `graders/NN-*.md` | A statement with `type: llm`, and `severity: critical` or `severity: minor` when it is not major. Judges get the task, the final reply and the diff. For Claude Code, they get each reply of the session. In an A/B run, Claude Opus and GPT Sol at high effort, and both must find the statement true. In a regression run, one judge from the other model family. `--judges claude` uses only the Claude judge. |
-| `eval.json` | `skill` or `rule`, and these options: `timeout` in seconds, `requires` (commands that must be on the `PATH`), `load: false` (the skill must not load, for cases that test the trigger), `judge_files` (files from `files/` that the judges also get), `judge_trace: true` (the judges also get the commands that the agent ran, with their output), `judge_posts: true` (the judges also get the text that the agent posted to the fake GitHub), `arms` (for example `["with"]` for a case with no skill), `targets` (the target ids that the case runs on, in place of the defaults), `base` (for a rule case, the commit whose rules the **without** arm gets, or `none` for no rules), `check_timeout` (seconds for `check.mjs`, 300 by default), `output_style` (the Claude Code output style that the **with** arm turns on), `critical` and `minor` (the names of the checks with that severity, and other checks are major), `honesty: false` (no honesty judge), `without_skills` (the skills that the **without** arm removes, such as the whole family of the skill). |
+| `eval.json` | `skill` or `rule`, and these options: `timeout` in seconds, `requires` (commands that must be on the `PATH`), `load: false` (the skill must not load, for cases that test the trigger), `judge_files` (files from `files/` that the judges also get), `judge_trace: true` (the judges also get the commands that the agent ran, with their output), `judge_posts: true` (the judges also get the text that the agent posted to the fake GitHub), `arms` (for example `["with"]` for a case with no skill), `targets` (the target ids that the case runs on, in place of the defaults), `base` (for a rule case, the commit whose rules the **without** arm gets, or `none` for no rules), `check_timeout` (seconds for `check.mjs`, 300 by default), `output_style` (the Claude Code output style that the **with** arm turns on), `critical` and `minor` (the names of the checks with that severity, and other checks are major), `honesty: false` (no honesty judge), `without_skills` (the skills that the **without** arm removes, such as the whole family of the skill), `seats` (a seats file, in the format of `skills/council/seats.json`, that the runner merges over the defaults for the case). |
 | `files/` | The files of the repo that the agent works in. |
 | `setup.mjs` | Optional. Gets the work folder, a `bin` folder on the `PATH` and a temporary folder. Use it for git history and fake commands such as `gh`. |
 | `check.mjs` | Optional. Checks the result with code, through the helpers in `lib.mjs`. A failed check skips the judges. |

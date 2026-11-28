@@ -62,7 +62,8 @@ PR with an agent from another model family.
       example below. A seat name is only an alias. Each host maps it to a
       model, so a host can map `opus` to another Opus version with no config
       change. Write a `family` only for a model that you checked. The tester
-      is the first seat with a family other than the lead.
+      is the first seat with a family other than the lead. Leave out `track`
+      to pin a seat.
    3. Run `node tools/patrol/patrol.mjs init` once. It makes the labels and
       the pinned log issue.
    4. Start one run by hand: open a new thread with the model of the lead in
@@ -76,10 +77,10 @@ PR with an agent from another model family.
 ```json
 {
   "models": {
-    "opus": { "provider": "claude", "model": "claude-opus-5-5", "family": "claude", "effort": "high" },
-    "fable": { "provider": "claude", "model": "claude-fable-5-2", "family": "claude", "effort": "high" },
-    "sol": { "provider": "codex", "model": "gpt-6.2-sol", "family": "gpt", "effort": "high" },
-    "muse": { "provider": "muse", "model": "muse-wonder-full-1.0", "family": "muse", "effort": "high" }
+    "opus": { "provider": "claude", "model": "claude-opus-5-5", "track": "claude-opus-*", "family": "claude", "effort": "high" },
+    "fable": { "provider": "claude", "model": "claude-fable-5-2", "track": "claude-fable-*", "family": "claude", "effort": "high" },
+    "sol": { "provider": "codex", "model": "gpt-6.2-sol", "track": "gpt-*-sol", "family": "gpt", "effort": "high" },
+    "muse": { "provider": "muse", "model": "muse-wonder-full-1.0", "track": "muse-wonder-full-*", "family": "muse", "effort": "high" }
   }
 }
 ```

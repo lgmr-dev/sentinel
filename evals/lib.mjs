@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { trackVersion } from '../skills/council/scripts/seat.mjs';
 
 export const work = process.env.EVAL_WORK;
 export const tmp = process.env.EVAL_TMP;
@@ -9,6 +11,7 @@ export const trace = () => fs.readFileSync(process.env.EVAL_TRACE, 'utf8');
 export const read = file => fs.existsSync(path.join(work, file)) ? fs.readFileSync(path.join(work, file), 'utf8') : null;
 export const sh = (cmd, args, cwd = work) => spawnSync(cmd, args, { cwd, encoding: 'utf8', timeout: 240000 });
 export const git = (...args) => sh('git', args);
+const seatScript = fileURLToPath(new URL('../skills/council/scripts/seat.mjs', import.meta.url));
 export const words = text => (text.match(/\S+/g) || []).length;
 const checks = [];
 export const check = (name, pass, detail = '') => checks.push({ name, pass: !!pass, detail: String(detail).slice(0, 300) });
@@ -148,8 +151,6 @@ export function codexSessions() {
   });
 }
 
-const councilModels = [...fs.readFileSync(new URL('../skills/council/SKILL.md', import.meta.url), 'utf8').matchAll(/\(`([\w.-]+)`\)/g)].map(match => match[1]);
-
 export function launches() {
   const file = path.join(tmp, 'launches.jsonl');
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
@@ -160,9 +161,26 @@ function model(args) {
   return flag >= 0 ? args[flag + 1] : args.find(arg => arg.startsWith('--model='))?.slice(8);
 }
 
-export function councilSeats() {
-  const replied = launches().filter(run => run.code === 0 && run.bytes > 0 && councilModels.includes(model(run.args))
-    && !run.args.some(arg => ['--help', '-h', 'help', '--version', '-V', '-v'].includes(arg)));
+export const hostFamily = () => ({ claude: 'claude', codex: 'gpt' })[process.env.EVAL_HOST];
+
+export function seatReplies(role, authorFamily) {
+  if (!process.env.EVAL_SEATS_HOME) return { members: [], error: 'EVAL_SEATS_HOME is not set', detail: 'EVAL_SEATS_HOME is not set' };
+  const resolved = spawnSync(process.execPath, [seatScript, 'resolve', role, ...(authorFamily ? ['--author-family', authorFamily] : [])],
+    { encoding: 'utf8', env: { ...process.env, XDG_CONFIG_HOME: process.env.EVAL_SEATS_HOME } });
+  if (resolved.status !== 0) return { members: [], error: resolved.stderr.trim(), detail: resolved.stderr.trim() };
+  const members = JSON.parse(resolved.stdout).map(({ name, provider, model, track, family }) =>
+    ({ name, provider, model, track, family, replies: 0, subagent: 0, launch: 0, session: 0, ids: new Set(), ambiguous: false }));
+  const shared = new Set();
+  const owner = (provider, id) => {
+    const mine = members.filter(m => m.provider === provider);
+    const exact = mine.find(m => m.model === id);
+    if (exact || !id) return exact;
+    const tracked = mine.filter(m => m.track && trackVersion(m.track, id));
+    if (tracked.length > 1) shared.add(id);
+    return tracked.length === 1 ? tracked[0] : undefined;
+  };
+  const credit = (member, kind, id) => { if (member) { member[kind]++; member.replies++; member.ids.add(id); } };
+  const replied = run => run.code === 0 && run.bytes > 0 && !run.args.some(arg => ['--help', '-h', 'help', '--version', '-V', '-v'].includes(arg));
   const trace = events();
   const chair = trace.find(e => e.type === 'thread.started')?.thread_id;
   const report = ({ content = [], harnessNoteCount = 0, harnessTailCount = 0 }) => content.slice(harnessNoteCount, content.length - harnessTailCount);
@@ -171,18 +189,38 @@ export function councilSeats() {
   const lastModel = (result, id) => result.status === 'async_launched'
     ? trace.findLast(e => e.parent_tool_use_id === id && e.message?.model)?.message.model ?? result.resolvedModel
     : result.modelsUsed?.at(-1) ?? result.resolvedModel;
-  const claudeSubagents = trace.filter(e => !e.parent_tool_use_id && e.tool_use_result?.resolvedModel)
-    .flatMap(e => (e.message?.content ?? []).filter(part => part.type === 'tool_result' && councilModels.includes(lastModel(e.tool_use_result, part.tool_use_id))
-      && answered(e.tool_use_result, part.tool_use_id)));
-  return {
-    claude: replied.filter(run => run.cli === 'claude' && run.args.some(arg => arg === '-p' || arg === '--print')).length + claudeSubagents.length,
-    codex: replied.filter(run => run.cli === 'codex' && run.args.includes('exec') && !run.args.includes('resume')).length
-      + codexSessions().filter(s => s.replied && s.parent && s.parent === chair && councilModels.includes(s.model)).length,
-    muse: replied.filter(run => run.cli === 'muse' && run.args.includes('exec')).length,
-  };
+  for (const e of trace.filter(e => !e.parent_tool_use_id && e.tool_use_result?.resolvedModel)) {
+    for (const part of (e.message?.content ?? []).filter(part => part.type === 'tool_result' && answered(e.tool_use_result, part.tool_use_id))) {
+      const id = lastModel(e.tool_use_result, part.tool_use_id);
+      credit(owner('claude', id), 'subagent', id);
+    }
+  }
+  const logged = launches();
+  for (const run of logged.filter(run => run.cli === 'claude' && run.args.some(arg => arg === '-p' || arg === '--print') && replied(run))) credit(owner('claude', model(run.args)), 'launch', model(run.args));
+  for (const run of logged.filter(run => run.cli === 'muse' && run.args.includes('exec') && replied(run))) credit(owner('muse', model(run.args)), 'launch', model(run.args));
+  const sessions = codexSessions();
+  for (const s of sessions.filter(s => s.replied && s.parent && s.parent === chair)) credit(owner('codex', s.model), 'session', s.model);
+  const execs = logged.filter(run => run.cli === 'codex' && run.args.includes('exec'));
+  const worked = execs.filter(run => replied(run) && !run.args.includes('resume'));
+  const loose = sessions.filter(s => s.replied && !s.parent && s.id !== chair);
+  if (role !== 'reviewer') for (const run of worked) credit(owner('codex', model(run.args)), 'launch', model(run.args));
+  else if (!execs.length) for (const s of loose) credit(owner('codex', s.model), 'session', s.model);
+  else {
+    const failed = new Set(execs.filter(run => !replied(run) && !run.args.includes('resume')).map(run => owner('codex', model(run.args))));
+    const used = new Set();
+    for (const run of worked) {
+      const member = owner('codex', model(run.args));
+      if (!member) continue;
+      if (failed.has(member)) { member.ambiguous = true; continue; }
+      const session = loose.find(s => !used.has(s) && owner('codex', s.model) === member);
+      if (session) { used.add(session); credit(member, 'launch', model(run.args)); }
+    }
+  }
+  const short = m => [m.name, [...m.ids].join('+') || m.model, ...['subagent', 'launch', 'session'].filter(kind => m[kind]).map(kind => `${m[kind]} ${kind}`),
+    ...(m.replies ? [] : ['0 replies']), ...(m.ambiguous ? ['ambiguous'] : [])].join(' ');
+  const detail = [members.map(short).join(', '), ...[...shared].map(id => `${id} matches more than one track`)].join('; ');
+  return { members, error: null, detail };
 }
-
-export const museLogin = () => fs.existsSync(path.join(tmp, 'muse-login'));
 
 const YAML_TO_JSON = 'require "yaml"; require "json"; print JSON.generate(YAML.safe_load(STDIN.read, aliases: true) || {})';
 
