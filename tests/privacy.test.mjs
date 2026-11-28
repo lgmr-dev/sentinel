@@ -158,6 +158,7 @@ const pushes = [
   ['a personal author domain that starts with a bot domain', { as: `${addressOf('noreply', 'anthropic.com')}ü.personal-isp.de` }, false],
   ['an author field with a public and a personal address', { as: `${noreply} ${personal}` }, false],
   ['a bare upper-case sign-off', { message: `x\n\nSIGNED-OFF-BY: ${personal}` }, false],
+  ['a pasted personal mailbox with an https prefix', { message: `Contact https://${mailbox}` }, false],
   ['a personal address with a Unicode domain', { message: `Ask ${addressOf('alice', 'gmüx.example-isp.de')} for details` }, false],
   ['a personal address with a Unicode local part', { message: `Ask ${addressOf('josé', 'personal-isp.de')}` }, false],
   ['a personal address after a URL query', { message: `See https://example.com?x=${addressOf('alice', 'personal-isp.de')}` }, false],
