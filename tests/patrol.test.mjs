@@ -38,6 +38,12 @@ const MODELS = {
   astra: { model: 'gpt-6.2-astra', family: 'gpt' }, muse: { model: 'muse-wonder-full-1.0', family: 'muse' },
 };
 const LEAD = 'claude-opus-5-5';
+const ONE_FAMILY = {
+  opus: { provider: 'claude', model: LEAD, family: 'claude', effort: 'high' },
+  fable: { provider: 'claude', model: 'claude-fable-5-2', family: 'claude', effort: 'high' },
+};
+const NO_KEY = { ...CONFIG.council, seats: ['fable', 'opus'] };
+const SOLO = { ...CONFIG, mode: 'full-send', council: { ...NO_KEY, one_family: true } };
 const T0 = Date.parse('2026-11-08T06:00:00Z');
 const MINUTE = 60000;
 const PLAN = JSON.stringify({ plan: { approved: true, round: 2, scores: { fable: 9.2, astra: 9.5, muse: 9 } } });
@@ -360,6 +366,78 @@ test('with no tester of another family the run uses demo, and paused ends the ru
   assert.deepEqual([unchecked.started.tester, unchecked.started.mode], [null, 'demo']);
   record({ id: unchecked.run, outcome: 'Plans ready', ...t.d() });
   assert.throws(() => t.begin({ ...CONFIG, mode: 'paused' }), ended('Paused'));
+});
+
+test('with council.one_family, a full-send run takes a tester of the family of the lead, and the gate keeps each check', () => {
+  const t = setup('github', SOLO);
+  const { run, started } = t.begin(SOLO, ONE_FAMILY);
+  assert.deepEqual([started.mode, started.tester, started.same_family], ['full-send', 'fable', true]);
+  assert.ok(readRun(run, t.d()).steps.Start.text.endsWith(' · one family'));
+  assert.ok(card(readRun(run, t.d())).split('\n').includes('Lead opus (claude) · seats fable, opus · tester fable (claude, same family)'));
+  const id = ready(t, 'Fix');
+  assert.equal(claim({ id: run, issue: id, ...t.d() }).tester, 'fable');
+  const head = commit(t, { 'src/app.js': 'x' }, `patrol/${id}`);
+  record({ id: run, pr: String(forgeStore.addPr(t.s, { branch: `patrol/${id}`, head }).id), ...t.d() });
+  assert.deepEqual(gate({ id: run, stage: 'merge', live: SOLO, ...t.d() }).problems,
+    ['the council score of fable, opus is missing or below 9', `verify-pr has no pass at ${head.slice(0, 7)}`, 'the check ci is missing']);
+  record({ id: run, step: 'Checks', data: JSON.stringify({ verify: 'pass' }), ...t.d() });
+  forgeStore.setCheck(t.s, head, 'ci', 'success');
+  record({ id: run, step: 'Review', data: JSON.stringify({ round: 1, scores: { fable: 9.1, opus: 9.3 } }), ...t.d() });
+  assert.equal(gate({ id: run, stage: 'handoff', live: SOLO, ...t.d() }).ok, true);
+  assert.equal(gate({ id: run, stage: 'merge', live: SOLO, ...t.d() }).ok, true);
+  assert.equal(t.begin(CONFIG).started.same_family, undefined);
+});
+
+test('a same family tester needs council.one_family, a family and another model than the lead', () => {
+  const t = setup('github', SOLO);
+  const demo = (cfg, models) => {
+    const { run, started } = t.begin(cfg, models);
+    assert.deepEqual([started.mode, started.tester, started.same_family], ['demo', null, undefined]);
+    assert.ok(readRun(run, t.d()).steps.Start.text.endsWith('no tester, so demo'));
+    record({ id: run, outcome: 'Plans ready', ...t.d() });
+  };
+  demo({ ...SOLO, council: NO_KEY }, ONE_FAMILY);
+  demo({ ...SOLO, council: { ...SOLO.council, one_family: false } }, ONE_FAMILY);
+  demo({ ...SOLO, council: { ...SOLO.council, seats: ['opus'], triage_quorum: 1 } }, ONE_FAMILY);
+  demo(SOLO, { ...ONE_FAMILY, fable: { ...ONE_FAMILY.fable, model: LEAD } });
+  demo(SOLO, { ...ONE_FAMILY, opus: { model: LEAD } });
+
+  const second = { ...SOLO, council: { ...SOLO.council, seats: ['astra', 'fable'] } };
+  const picked = t.begin(second, { ...ONE_FAMILY, astra: { model: 'gpt-6.2-astra' } });
+  assert.deepEqual([picked.started.mode, picked.started.tester, picked.started.same_family], ['full-send', 'fable', true]);
+  record({ id: picked.run, outcome: 'Idle', ...t.d() });
+
+  const mixed = t.begin({ ...CONFIG, mode: 'full-send', council: { ...CONFIG.council, one_family: true } });
+  assert.deepEqual([mixed.started.mode, mixed.started.tester, mixed.started.same_family], ['full-send', 'astra', undefined]);
+  assert.ok(!readRun(mixed.run, t.d()).steps.Start.text.includes('one family'));
+  assert.ok(!card(readRun(mixed.run, t.d())).includes('same family'));
+  record({ id: mixed.run, outcome: 'Idle', ...t.d() });
+
+  const { effort, ...noEffort } = ONE_FAMILY.fable;
+  void effort;
+  assert.throws(() => t.begin(SOLO, { ...ONE_FAMILY, fable: noEffort }),
+    error => ended('Incomplete')(error) && error.result.reason === 'the same family tester fable needs effort in seats.json');
+});
+
+test('a run with a same family tester ends as Needs owner when the live config does not set council.one_family to true', () => {
+  for (const council of [NO_KEY, { ...SOLO.council, one_family: false }]) {
+    const t = setup('github', SOLO);
+    const { run } = t.begin(SOLO, ONE_FAMILY);
+    const id = ready(t, 'Fix');
+    claim({ id: run, issue: id, ...t.d() });
+    commit(t, { 'src/app.js': 'x' }, `patrol/${id}`);
+    const live = { ...SOLO, council };
+    assert.equal(live.mode, 'full-send');
+    assert.throws(() => gate({ id: run, stage: 'merge', live, ...t.d() }),
+      error => ended('Needs owner')(error) && error.result.reason === 'council.one_family is not true');
+    assert.ok(labels(t.s, id).includes(LABELS['needs-owner']));
+  }
+});
+
+test('council.one_family is true or false, and an override cannot set it', () => {
+  assert.throws(() => checkConfig({ ...CONFIG, council: { ...CONFIG.council, one_family: 'yes' } }), /a council.one_family of true or false/);
+  assert.equal(checkConfig(structuredClone(SOLO)).council.one_family, true);
+  assert.throws(() => override(CONFIG, 'one_family=true'), /unknown override: one_family=true/);
 });
 
 test('a stuck issue with a recorded PR stays on the card, and its merge closes it', () => {
@@ -736,22 +814,27 @@ test('a verify-pr verdict other than pass marks the Checks row for a person', ()
   assert.ok(card(readRun(run, t.d())).includes(` [!] Checks    verify-pr regressions found at ${head.slice(0, 7)}`));
 });
 
-test('the CLI runs the steps end to end against a fake gh', { timeout: 60000, skip: process.platform === 'win32' }, () => {
-  const r = repo();
+function fakeGh({ config = CONFIG, models = MODELS, s = store() } = {}) {
+  const r = repo(config);
   const bin = path.join(r.root, 'bin'), data = path.join(r.root, 'forge.json');
   fs.mkdirSync(bin);
-  fs.writeFileSync(data, JSON.stringify(store()));
+  fs.writeFileSync(data, JSON.stringify(s));
   fs.writeFileSync(path.join(bin, 'gh'), `#!/usr/bin/env node
 let input = '';
 try { input = require('node:fs').readFileSync(0, 'utf8'); } catch {}
 import(${JSON.stringify(pathToFileURL(path.join(here, 'fixtures', 'patrol-forge.mjs')).href)}).then(m => m.ghCli(process.argv.slice(2), ${JSON.stringify(data)}, input));
 `, { mode: 0o755 });
   fs.mkdirSync(path.join(r.env.XDG_CONFIG_HOME, 'sentinel'), { recursive: true });
-  fs.writeFileSync(path.join(r.env.XDG_CONFIG_HOME, 'sentinel', 'seats.json'), JSON.stringify({ models: MODELS }));
+  fs.writeFileSync(path.join(r.env.XDG_CONFIG_HOME, 'sentinel', 'seats.json'), JSON.stringify({ models }));
   const cli = (...args) => {
     const result = spawnSync(process.execPath, [engine, ...args], { cwd: r.work, encoding: 'utf8', env: { ...process.env, ...r.env, PATH: `${bin}${path.delimiter}${process.env.PATH}` } });
     return { code: result.status, out: result.stdout, err: result.stderr, json: () => JSON.parse(result.stdout) };
   };
+  return { r, data, cli };
+}
+
+test('the CLI runs the steps end to end against a fake gh', { timeout: 60000, skip: process.platform === 'win32' }, () => {
+  const { r, data, cli } = fakeGh();
   assert.equal(cli('init').code, 0);
   const locked = cli('lock');
   assert.equal(locked.code, 0, locked.err);
@@ -801,6 +884,24 @@ import(${JSON.stringify(pathToFileURL(path.join(here, 'fixtures', 'patrol-forge.
   assert.deepEqual([cli('pick', '--run', failed).code, cli('record', '--run', failed, '--step', 'Scan').code], [2, 2]);
   assert.equal(cli('record', '--run', failed, '--outcome', 'Incomplete', '--reason', 'start failed').json().outcome, 'Incomplete');
   assert.equal(cli('lock').code, 0, 'a run whose start failed can still record its outcome and free the lock');
+});
+
+test('the CLI gate reads the live config, and a removed council.one_family ends a same family run', { timeout: 60000, skip: process.platform === 'win32' }, () => {
+  const s = store(), forge = github(ghRun(s));
+  init({ forge });
+  const id = String(forgeStore.addIssue(s, { title: 'Fix', labels: [LABELS.triage, LABELS.confirmed, LABELS.ready] }).id);
+  forge.addNote(id, stateNote({ severity: 7, plan: { approved: true, round: 1, scores: { fable: 9, opus: 9 } } }));
+  const { r, cli } = fakeGh({ config: SOLO, models: ONE_FAMILY, s });
+  const run = cli('lock').json().run;
+  const started = cli('start', '--run', run, '--model', LEAD);
+  assert.equal(started.code, 0, started.err);
+  assert.deepEqual([started.json().mode, started.json().tester, started.json().same_family], ['full-send', 'fable', true]);
+  assert.equal(cli('claim', '--run', run, '--id', id).code, 0);
+  fs.writeFileSync(path.join(r.work, 'tools/patrol/patrol.json'), JSON.stringify({ ...SOLO, council: NO_KEY }));
+  git(r.work, 'commit', '-qam', 'remove one_family');
+  git(r.work, 'push', '-q', 'origin', 'HEAD:main');
+  const handoff = cli('gate', '--run', run, '--stage', 'handoff');
+  assert.deepEqual([handoff.code, handoff.json().outcome, handoff.json().reason], [3, 'Needs owner', 'council.one_family is not true']);
 });
 
 async function agentRepo() {
@@ -868,6 +969,11 @@ test('publish --mode comment posts the tester report on the PR and says when the
 
 test('the engine never merges and never turns on auto-merge', () => {
   assert.doesNotMatch(fs.readFileSync(engine, 'utf8'), /pr merge|auto-merge|merge --auto|merge_when_pipeline_succeeds|auto_merge|\/merge['`]|completionOptions/);
+});
+
+test('the playbook and the engine name no merge command and no auto-merge', () => {
+  const all = [path.join(skill, 'playbook.md'), engine].map(file => fs.readFileSync(file, 'utf8')).join('\n').replace(/set-head origin --auto/g, '');
+  assert.doesNotMatch(all, /\bpr\s+merge\b|--auto(?![\w-])|auto-merge|automerge/i);
 });
 
 test('the config template passes the config check in demo mode', () => {

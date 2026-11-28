@@ -30,7 +30,7 @@ T3 thread shows it too.
 
 The playbook runs the skills `council`, `review-loop`, `full-stop`, `verify-pr`
 and `full-send` without a change to them. A CI job, `patrol-verify`, tests each
-PR with an agent from another model family.
+PR with a Codex agent.
 
 ## Adopt
 
@@ -61,9 +61,12 @@ PR with an agent from another model family.
       `patrol.json`, the lead and each council seat, to a model, as in the
       example below. A seat name is only an alias. Each host maps it to a
       model, so a host can map `opus` to another Opus version with no config
-      change. Write a `family` only for a model that you checked. The tester
-      is the first seat with a family other than the lead. Leave out `track`
-      to pin a seat.
+      change. Write a `family` only for a model that you checked. Leave out
+      `track` to pin a seat.
+
+      The tester is the first seat with a family other than the lead. With
+      `council.one_family`, the tester can have the family of the lead. Then
+      its entry also needs `provider` and `effort`.
    3. Run `node tools/patrol/patrol.mjs init` once. It makes the labels and
       the pinned log issue.
    4. Start one run by hand: open a new thread with the model of the lead in
@@ -103,7 +106,7 @@ other template values are safe defaults.
 | `review` | `review-loop`, `both` or `council`: the review of the patch | `both` |
 | `scan.max_findings` | The most new defects in one run | 10 |
 | `budget` | `plans_per_run`, `fixes_per_day` and `council_calls_per_run` | 2, 1, 60 |
-| `council` | `threshold`, `rounds` and `triage_quorum` | 9.0, 3, 2 |
+| `council` | `threshold`, `rounds`, `triage_quorum` and the optional `one_family`. With `one_family: true` and no seat of another family, the run keeps its mode and uses the first seat with the family of the lead and another model as the tester. Then `full-send` merges with no tester of another family. For it, keep `review` `both` and at least one check in `merge.required_checks`, and read some `full-stop` runs first. Use `full-send` only behind branch protection, as [Safety](#safety) says. When you remove the key, a run ends as `Needs owner` at its next gate. | 9.0, 3, 2, no `one_family` |
 | `limits` | `attempts`, `lock_stale_minutes`, `max_files` and `max_lines` | 3, 120, 40, 2000 |
 | `ranking.groups` | The defect groups, each with a `name`, an `impact` from 0 to 5 and examples | Placeholder groups |
 | `owner_gates` | Paths that stop at `Ready for owner`, also in `full-send`. Each gate has `paths` and a `reason`. | None |
