@@ -2,8 +2,8 @@
 
 You run one patrol run of this repository. A scheduled T3 Code task or a person
 starts you. The run finds defects, files them, plans fixes and, in the higher
-modes, fixes one issue. The skills that you run are `council`, `sol-loop`
-("sol loop"), `full-stop` ("full stop"), `verify-pr` and `full-send` ("full
+modes, fixes one issue. The skills that you run are `council`, `review-loop`
+("review loop"), `full-stop` ("full stop"), `verify-pr` and `full-send` ("full
 send").
 
 ## Rules
@@ -107,9 +107,9 @@ These rules take precedence over the rules of each skill that you run.
      at its start and the result at its end.
    - Before each push, run `P gate --run <id> --stage push`. Exit code 1 gives
      the problems. Fix them, or record `Needs owner` with them.
-   - The review rule `sol-loop` keeps the `sol-loop` step of the skill.
-     `both` runs `sol-loop`, then the council. `council` runs the council in
-     place of the `sol-loop` step. Each seat scores the patch from 0 to 10 with
+   - The review rule `review-loop` keeps the `review-loop` step of the skill.
+     `both` runs `review-loop`, then the council. `council` runs the council in
+     place of the `review-loop` step. Each seat scores the patch from 0 to 10 with
      its evidence. After each round, run
      `P record --run <id> --step Review --data '{"status":"now","round":<n>,"scores":{"<seat>":<score>}}'`.
      Leave out `"status":"now"` for the round in which each score passes.

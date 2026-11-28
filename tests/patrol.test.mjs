@@ -374,10 +374,14 @@ test('a stuck issue with a recorded PR stays on the card, and its merge closes i
   assert.equal(it.state, 'closed');
 });
 
+test('the config check changes the old review value sol-loop to review-loop', () => {
+  assert.equal(checkConfig({ ...CONFIG, review: 'sol-loop' }).review, 'review-loop');
+});
+
 test('the config needs each number, and an override is checked the same way', () => {
   const t = repo({ ...CONFIG, limits: { ...CONFIG.limits, lock_stale_minutes: undefined } });
   assert.throws(() => readConfig(t.work), /needs a whole number for limits.lock_stale_minutes/);
-  assert.throws(() => checkConfig({ ...CONFIG, review: 'none' }), /a review of sol-loop, both or council/);
+  assert.throws(() => checkConfig({ ...CONFIG, review: 'none' }), /a review of review-loop, both or council/);
   assert.throws(() => checkConfig({ ...CONFIG, council: { ...CONFIG.council, seats: [] } }), /council.seats/);
   assert.throws(() => checkConfig({ ...CONFIG, council: { ...CONFIG.council, triage_quorum: 0 } }), /triage_quorum from 1/);
   assert.throws(() => checkConfig({ ...CONFIG, council: { ...CONFIG.council, triage_quorum: 4 } }), /triage_quorum from 1/);
@@ -487,8 +491,8 @@ test('the gate stops a protected path, a large diff, a lower live mode, a hold a
   assert.ok(gate({ id: run, stage: 'push', live: config, ...t.d() }).problems.includes(`issue #${id} has patrol:hold`));
 });
 
-test('the review rule sol-loop needs no council score, and review council needs one', () => {
-  for (const review of ['sol-loop', 'council']) {
+test('the review rule review-loop needs no council score, and review council needs one', () => {
+  for (const review of ['review-loop', 'council']) {
     const config = { ...CONFIG, review };
     const t = setup('github', config);
     const { run } = t.begin(config);
@@ -499,7 +503,7 @@ test('the review rule sol-loop needs no council score, and review council needs 
     record({ id: run, pr: String(forgeStore.addPr(t.s, { branch: `patrol/${id}`, head }).id), ...t.d() });
     forgeStore.setCheck(t.s, head, 'ci', 'success');
     const problems = gate({ id: run, stage: 'handoff', live: config, ...t.d() }).problems;
-    assert.deepEqual(problems, review === 'sol-loop' ? [] : ['the council score of fable, astra, muse is missing or below 9'], review);
+    assert.deepEqual(problems, review === 'review-loop' ? [] : ['the council score of fable, astra, muse is missing or below 9'], review);
     record({ id: run, step: 'Review', data: JSON.stringify({ scores: { fable: 9, astra: 8.9, muse: 9.5 } }), ...t.d() });
     if (review === 'council') assert.deepEqual(gate({ id: run, stage: 'handoff', live: config, ...t.d() }).problems, ['the council score of astra is missing or below 9']);
   }
@@ -653,16 +657,16 @@ test('the card shows each step, grays the steps that the mode turns off, and lis
   assert.ok(demo.includes('Next in queue: #2 (8/10)'));
   record({ id: run, outcome: 'Plans ready', ...t.d() });
 
-  const sol = { ...CONFIG, review: 'sol-loop' };
-  const t2 = setup('github', sol);
-  const { run: run2 } = t2.begin(sol);
+  const loop = { ...CONFIG, review: 'review-loop' };
+  const t2 = setup('github', loop);
+  const { run: run2 } = t2.begin(loop);
   const id = ready(t2, 'Tax: the allowance uses the wrong year', { severity: 9 });
   claim({ id: run2, issue: id, ...t2.d() });
   const lines = card(readRun(run2, t2.d())).split('\n');
   assert.ok(lines.includes(`Issue #${id} Tax: the allowance uses the wrong year`));
   assert.ok(lines.includes('Severity 9/10 critical (impact 3) · attempt 1 of 3') || lines.includes('Severity 9/10 critical · attempt 1 of 3'));
   assert.ok(lines.includes(' [x] Plan      round 1 · fable 9'));
-  assert.ok(lines.includes(' [-] Review    off, review is sol-loop'));
+  assert.ok(lines.includes(' [-] Review    off, review is review-loop'));
   assert.ok(lines.includes(' [-] Merge     off in full-stop mode'));
   assert.ok(lines.includes(' [ ] Fix'));
 });

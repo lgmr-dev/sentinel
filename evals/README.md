@@ -165,6 +165,11 @@ earlier runs of the same day, with 1 to 3 runs for each arm.
   planted bugs in almost each combination, with copies or with mixed models. The
   case cannot separate them, so the default of Opus and Sol stays.
 
+On 11 November 2026 (#61), the default council became Fable 5.2, GPT-6 Astra
+and Muse Wonder Full. Then the GPT seat changed three times. It became GPT-6.1
+Sol on 13 November (#64), GPT-6.2 Astra on 23 November (#82) and GPT-6.2 Sol on
+24 November (#86).
+
 ## Results of 1 November 2026
 
 An A/B run of the new rule lines on the same 5 models. The repeat, cleanup and

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "inputs": {
-    "upstream/imports.json": "1db9d5f4b4b7dcd65c0eedefecb1e9b1f403df05c34dabcdeab04e519c990ebe"
+    "upstream/imports.json": "bd1d2b627bd6f47a4f06603d9c5b33aceade86507aa3bea29642c43d55e61ad5"
   },
   "sources": {
     "tstack": "11e37a74d0a6868c121cd0910ab2b3bd9873b92a",
@@ -14,7 +14,7 @@
       "source": "tstack",
       "path": "skills/babysit-pr/SKILL.md",
       "sha256": "fbe43ba3ab76a466a88ef8b46dca1b41fb8101347d24a396903849865173a6ac",
-      "local": "b0dfa346a5944499cb9d1043d626798feffec059fbd1a436a65b581c4856759d",
+      "local": "3d1c00d186f373f0b4aa043759f2dea3c46d37ece2913634a9471f6719281ce0",
       "executable": false
     },
     "skills/babysit-pr/scripts/pr-wait": {
@@ -42,7 +42,7 @@
       "source": "tstack",
       "path": "skills/full-send/SKILL.md",
       "sha256": "ba585e47cd901506b0e2de13025b0e39bc02462c136cf27491ad3efbdfe66020",
-      "local": "ab6f21a77247015f5da8f89f22834f67da725cb299c43ff7e4ec7a3d0702f204",
+      "local": "44660476a4475a1d0545163fb35f7ec766cc7d5ea590263de19aaac82148802f",
       "executable": false
     },
     "skills/full-send/agents/openai.yaml": {
@@ -90,18 +90,18 @@
       "sha256": "6675e91e10f2b264fe1a027072f6d9f46299f781011e248a5ba075fc1f764e09",
       "executable": false
     },
-    "skills/sol-loop/SKILL.md": {
+    "skills/review-loop/SKILL.md": {
       "source": "tstack",
       "path": "skills/sol-loop/SKILL.md",
       "sha256": "1db1eb4c4a156ee666070e9a12623d520cd1bd9b19c3fc21003fe5a440ba0b10",
-      "local": "3f8f7de9c1f32ac79d44205f34112136084f4959d7bdaedde391bceed6156250",
+      "local": "db0237515dd8b7c23287c3b23db61cda6e02400698f476e60ca6b8b80fdda567",
       "executable": false
     },
     "skills/full-stop/full-send.md": {
       "source": "tstack",
       "path": "skills/full-send/SKILL.md",
       "sha256": "ba585e47cd901506b0e2de13025b0e39bc02462c136cf27491ad3efbdfe66020",
-      "local": "ab6f21a77247015f5da8f89f22834f67da725cb299c43ff7e4ec7a3d0702f204",
+      "local": "44660476a4475a1d0545163fb35f7ec766cc7d5ea590263de19aaac82148802f",
       "executable": false
     },
     "skills/babysit-pr/LICENSE": {
@@ -146,7 +146,7 @@
       "sha256": "8095f9a9f97d074131f6a2ce09b952d12c18b36f09f4e5df0517c4e64e82c851",
       "executable": false
     },
-    "skills/sol-loop/LICENSE": {
+    "skills/review-loop/LICENSE": {
       "source": "tstack",
       "path": "LICENSE",
       "sha256": "8095f9a9f97d074131f6a2ce09b952d12c18b36f09f4e5df0517c4e64e82c851",

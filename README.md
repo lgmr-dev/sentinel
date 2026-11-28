@@ -135,7 +135,7 @@ agent can also load each skill when its description fits the task.
 |---|---|---|
 | `full-send` | "full send" | The agent does the work, proves it, files the pull request and merges it when the checks of the branch protection pass. |
 | `full-stop` | "full stop" | The agent stops when the pull request is ready for you to merge. |
-| `sol-loop` | "sol loop" | GPT Sol reviews the change in a loop until both agents agree. |
+| `review-loop` | "review loop" or "sol loop" | GPT Sol reviews the change in a loop until both agents agree. |
 | `council` | "council" | Claude Fable 5.2, GPT-6.2 Sol and Muse Wonder Full review until they agree, for 3 rounds by default. Each model runs at high effort by default. Name fewer seats, other models, efforts or limits in the request. |
 | `council` | "arena", or a design request to the council | Each model writes its own plan. A judge scores the plans without model names. The agent merges the best parts into one plan. |
 | `file-pr` | "file a PR" | The agent files a short pull request. |
@@ -149,8 +149,9 @@ agent can also load each skill when its description fits the task.
 | `tldr` | "tldr" | A short version that keeps each fact that you need to decide or act. |
 | `technical-writing` | "simplify this", "STE" | Docs, PR text and rewrites in simple technical English, without AI patterns. |
 
-At xhigh, `council`, `cleanup`, `no-comments`, `sol-loop`, `technical-writing`
-and the rules for comments and cleanup changed the result on 4 or 5 models.
+At xhigh, `council`, `cleanup`, `no-comments`, `review-loop` (as `sol-loop`,
+31 October 2026), `technical-writing` and the rules for comments and cleanup
+changed the result on 4 or 5 models.
 `statechart` changed it on 2 or 3 models.
 See [evals/README.md](evals/README.md).
 
@@ -221,6 +222,22 @@ Monday. When an imported file changes, the bot opens a draft pull request with
 the new pins and the full diff. It merges each upstream change into the
 Sentinel edits of that file. After you merge the pull request, pull this
 repository and run the installer again.
+
+A repository with `patrol` needs more steps. An old playbook asks for
+`sol-loop`, and its step 1.4 then ends the run as `Incomplete`. A scheduled
+run reads only the playbook. Do these steps in this order:
+
+1. Pause the scheduled task.
+2. Run the installer.
+3. Copy the new `playbook.md` and `patrol.mjs` to `tools/patrol/` in each
+   repository, and merge them into the default branch. Copy both, because an
+   old `patrol.mjs` refuses the review value `review-loop`. A scheduled run
+   checks out `origin/HEAD`, so a local copy has no effect.
+4. If the `patrol.json` of the repository names a seat that the host seats
+   file does not define, add the entry. Patrol reads only the host file. The
+   Patrol of Sentinel now names the seat `sol`. Without a `sol` entry, `start`
+   gives "the seat sol is not in seats.json".
+5. Start the scheduled task again.
 
 ## Known limits
 

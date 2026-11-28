@@ -160,7 +160,7 @@ for (const impl of impls) {
     await fs.writeFile(path.join(mine, 'SKILL.md'), 'my own skill\n');
     assert.equal(install(impl, home, { global: true, hosts: 'claude', skills: 'core' }).status, 1);
     assert.deepEqual(await tree(mine), { 'SKILL.md': Buffer.from('my own skill\n').toString('base64') });
-    assert.ok(await exists(path.join(home, '.claude/skills/sol-loop/SKILL.md')));
+    assert.ok(await exists(path.join(home, '.claude/skills/review-loop/SKILL.md')));
     ok(install(impl, home, { global: true, hosts: 'claude', skills: 'core', remove: true }));
     assert.ok(await exists(path.join(mine, 'SKILL.md')));
   }));
@@ -226,7 +226,8 @@ for (const impl of impls) {
 
     await fs.writeFile(path.join(skills, 'sol-loop/SKILL.md'), 'old sol\n');
     ok(install(impl, home, opts));
-    assert.deepEqual(await tree(path.join(skills, 'sol-loop')), await tree(path.join(root, 'skills/sol-loop')));
+    assert.equal(await exists(path.join(skills, 'sol-loop')), false);
+    assert.deepEqual(await tree(path.join(skills, 'review-loop')), await tree(path.join(root, 'skills/review-loop')));
     assert.equal(await exists(legacy), false);
     ok(install(impl, home, { ...opts, check: true }));
   }));

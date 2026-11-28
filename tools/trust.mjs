@@ -83,7 +83,11 @@ function loadCases(evalsDir) {
   return cases;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+const isMain = import.meta.main ?? (() => {
+  const self = fileURLToPath(import.meta.url);
+  try { return path.resolve(process.argv[1]) === self || fs.realpathSync(process.argv[1]) === self; } catch { return false; }
+})();
+if (isMain) {
   const dirs = process.argv.slice(2);
   if (!dirs.length) { console.error('usage: node tools/trust.mjs <results dir>...'); process.exit(2); }
   const latest = new Map();

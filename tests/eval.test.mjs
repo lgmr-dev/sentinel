@@ -25,6 +25,14 @@ test('--resume refuses a folder with two finished rows of one run', async () => 
   await fs.rm(dir, { recursive: true, force: true });
 });
 
+test('the trust tool runs its CLI through a symlink', { skip: process.platform === 'win32' }, async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'trust-'));
+  await fs.symlink(fileURLToPath(new URL('../tools/trust.mjs', import.meta.url)), path.join(dir, 'trust-link.mjs'));
+  const r = spawnSync(process.execPath, [path.join(dir, 'trust-link.mjs')], { encoding: 'utf8' });
+  await fs.rm(dir, { recursive: true, force: true });
+  assert.deepEqual([r.status, r.stderr], [2, 'usage: node tools/trust.mjs <results dir>...\n']);
+});
+
 async function evalCheck(name, check, { launches = [], wait = false, sessions = [], muse = false, trace: chairEvents = [] }) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'check-'));
   const work = path.join(dir, 'work'), home = path.join(dir, 'home'), sessionDir = path.join(home, '.codex', 'sessions');
@@ -110,7 +118,7 @@ test('the council checks need a Muse seat that replied, when the sandbox has a M
 });
 
 test('the sol-loop check counts a Sol reviewer of the chair, not of another thread', async () => {
-  const reviewer = options => evalCheck('sol-loop-pagination', 'a Sol reviewer replied', options);
+  const reviewer = options => evalCheck('review-loop-pagination', 'a Sol reviewer replied', options);
   assert.equal(await reviewer({ sessions: [{ phase: 'final_answer' }] }), true);
   assert.equal(await reviewer({ sessions: [{ parent: 'chair', phase: 'final_answer' }] }), true);
   assert.equal(await reviewer({ sessions: [{ parent: 'other', phase: 'final_answer' }] }), false);

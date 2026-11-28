@@ -271,7 +271,8 @@ export function checkConfig(config) {
   const problems = [];
   if (config.version !== 1) problems.push('version 1');
   if (rank(config.mode) < 0) problems.push(`a mode of ${MODES.join(', ')}`);
-  if (!['sol-loop', 'both', 'council'].includes(config.review)) problems.push('a review of sol-loop, both or council');
+  if (config.review === 'sol-loop') config.review = 'review-loop';
+  if (!['review-loop', 'both', 'council'].includes(config.review)) problems.push('a review of review-loop, both or council');
   if (!Array.isArray(config.council?.seats) || !config.council.seats.length) problems.push('council.seats');
   const filled = value => typeof value === 'string' && value.trim() !== '';
   if (!forges[config.forge?.kind] || !filled(config.forge.base)) problems.push('forge.kind and forge.base');
@@ -739,10 +740,10 @@ export function record({ id, step, data, pr, outcome, reason, calls, ...deps }) 
 
 export function card(rec) {
   const c = rec.config;
-  const off = row => (OFF[rec.mode] ?? []).includes(row) || (row === 'Review' && rec.review === 'sol-loop');
+  const off = row => (OFF[rec.mode] ?? []).includes(row) || (row === 'Review' && rec.review === 'review-loop');
   const row = (name, step) => {
     const mark = step ? MARKS[step.status ?? 'done'] : off(name) ? '-' : ' ';
-    const why = !off(name) ? '' : (OFF[rec.mode] ?? []).includes(name) ? `off in ${rec.mode} mode` : 'off, review is sol-loop';
+    const why = !off(name) ? '' : (OFF[rec.mode] ?? []).includes(name) ? `off in ${rec.mode} mode` : 'off, review is review-loop';
     const words = step ? [step.text && flat(step.text), step.scores && `${step.round ? `round ${step.round} · ` : ''}${scores(step.scores)}`,
       step.verify && `verify-pr ${step.verify} at ${String(step.verify_head).slice(0, 7)}`].filter(Boolean).join(' · ') : why;
     return ` [${mark}] ${name.padEnd(9)} ${words}`.trimEnd();

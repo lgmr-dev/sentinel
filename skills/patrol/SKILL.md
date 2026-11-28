@@ -28,7 +28,7 @@ T3 thread shows it too.
 | `full-send` | All, with the merge | `Merged` |
 | `paused` | none | `Paused` |
 
-The playbook runs the skills `council`, `sol-loop`, `full-stop`, `verify-pr`
+The playbook runs the skills `council`, `review-loop`, `full-stop`, `verify-pr`
 and `full-send` without a change to them. A CI job, `patrol-verify`, tests each
 PR with an agent from another model family.
 
@@ -78,7 +78,7 @@ PR with an agent from another model family.
   "models": {
     "opus": { "provider": "claude", "model": "claude-opus-5-5", "family": "claude", "effort": "high" },
     "fable": { "provider": "claude", "model": "claude-fable-5-2", "family": "claude", "effort": "high" },
-    "astra": { "provider": "codex", "model": "gpt-6.2-astra", "family": "gpt", "effort": "high" },
+    "sol": { "provider": "codex", "model": "gpt-6.2-sol", "family": "gpt", "effort": "high" },
     "muse": { "provider": "muse", "model": "muse-wonder-full-1.0", "family": "muse", "effort": "high" }
   }
 }
@@ -98,8 +98,8 @@ other template values are safe defaults.
 | --- | --- | --- |
 | `forge` | `kind` (`github`, `gitlab` or `azure`) and `base`. GitLab adds `api_url` and `project_id`, and the host needs `PATROL_GITLAB_TOKEN`. Azure DevOps adds `organization`, `project`, `repository`, `work_item_type` and `closed_state`. | `github`, `main` |
 | `mode` | `demo`, `full-stop`, `full-send` or `paused` | `demo` |
-| `lead`, `council.seats` | Seat names from `seats.json` | Lead `opus`, seats `fable`, `astra` and `muse` |
-| `review` | `sol-loop`, `both` or `council`: the review of the patch | `both` |
+| `lead`, `council.seats` | Seat names from `seats.json` | Lead `opus`, seats `fable`, `sol` and `muse` |
+| `review` | `review-loop`, `both` or `council`: the review of the patch | `both` |
 | `scan.max_findings` | The most new defects in one run | 10 |
 | `budget` | `plans_per_run`, `fixes_per_day` and `council_calls_per_run` | 2, 1, 60 |
 | `council` | `threshold`, `rounds` and `triage_quorum` | 9.0, 3, 2 |
