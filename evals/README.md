@@ -11,7 +11,8 @@ how badly it can fail.
 | `make eval ARGS="--case <name>"` | The same check for the named cases. |
 | `make eval ARGS="--ab"` | A/B. Each case runs **with** and **without** its skill or rule, on the 5 default models, with both judges. It prints the trust table. Use it for a new or removed skill, a rewrite of a skill, or a new or removed rules section. |
 | `make eval ARGS="--ab --arms without"` | An A/B that runs only the named arm. The **without** arm does not change with the skill, so a climb can run it once and join its `runs.jsonl` with the runs of each new skill text. Put both arms in one folder for `tools/trust.mjs`, because it keeps only the last folder for each case and target. |
-| `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
+| `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. It copies a row only when its saved `seats` and `seats_written` are the same as those of the new run. Each row saves the merged seats, so a change of the default seats that changes them runs the row again. A row with no saved seats runs again. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
+| `make eval ARGS="--case <name> --seats <file>"` | Uses the seats file for each case of this run, in place of the `seats` field of the case. `--rejudge` refuses the flag, because a rejudge reads the saved seats. |
 | `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. |
 | `node tools/trust.mjs <results folder>...` | Prints the trust table of saved A/B runs. |
 
@@ -21,9 +22,25 @@ the target row of that model in `targets.json`. A model with no target row gets
 no judge. When the rejudge keeps no judge, it picks the judges as a new run
 does.
 
-The council checks of a rejudge read the seat models from the current council
-skill. So a council run from before a change of the seats counts 0 seats for
-each changed model.
+Before a run starts, the runner merges the `seats` field of the case, or the
+file of `--seats`, over `skills/council/seats.json` of the checkout. It uses the
+merge of `skills/council/scripts/seat.mjs`. Each row saves the merged file in
+`seats`, and `seats_written` tells if the runner wrote it. The runner writes
+the file to `home/.config/sentinel/seats.json` in the sandbox only when the
+case or `--seats` gives seats. Other cases keep a clean host.
+
+Before the first launch, the runner resolves the role of each case with
+`skills/council/scripts/seat.mjs`. It stops with an error when the role does
+not resolve. The runner logs only the `claude`, `codex` and `muse` CLIs. So it
+also stops when a member of the role of the case has another `provider`.
+The role of a `council` case is `council`, and the role of a `review-loop`
+case is `reviewer`.
+
+The seat checks read the saved seats of the row, also in a rejudge. They do
+not read the host file of the sandbox, because the agent can change it. A row
+from before this change has no saved seats, so its checks use the current
+defaults. Such a row can come from other seats, and its seat check can then
+fail.
 
 In an A/B run, the arms are:
 
@@ -164,6 +181,11 @@ earlier runs of the same day, with 1 to 3 runs for each arm.
 - **Council composition:** each council of 3 strong models found 12 of 12
   planted bugs in almost each combination, with copies or with mixed models. The
   case cannot separate them, so the default of Opus and Sol stays.
+
+On 11 November 2026 (#61), the default council became Fable 5.2, GPT-6 Astra
+and Muse Wonder Full. Then the GPT seat changed three times. It became GPT-6.1
+Sol on 13 November (#64), GPT-6.2 Astra on 23 November (#82) and GPT-6.2 Sol on
+24 November (#86).
 
 ## Results of 1 November 2026
 
@@ -1030,6 +1052,66 @@ with the new check. The eval stops a case after a pass, so each case ran once:
   `council-review-pr`, so that run fails with the old check.
 - **Folder:** `2026-11-23T00-15-34-074Z`.
 
+## Results of 28 November 2026: the seats file and review-loop
+
+Pull request #90 added the seats file, renamed `sol-loop` to `review-loop`
+and changed the seat checks. The cases ran at `818cab1`, on Opus 5.5 xhigh
+and Sol 6.2 xhigh.
+
+The regression cases ran once on each target:
+
+| Case | Opus | Sol | Seats that the check counted |
+| --- | --- | --- | --- |
+| `council-design` | 1/1 | 1/1 | Opus: fable 1 launch, sol 2 launch. Sol: fable 2 launch, sol 1 session. |
+| `council-review-pr` | 1/1 | 1/1 | Opus: fable 1 launch, sol 1 launch. Sol: fable 1 launch, sol 1 session. |
+| `full-send-fix` | 1/1 | 1/1 | The check counts no seats. |
+| `full-stop-fix` | 1/1 | 1/1 | The check counts no seats. |
+| `patrol-setup` | 1/1 | 1/1 | The check counts no seats. |
+| `neg-council-review` | 1/1 | 1/1 | The skill did not load, as the case needs. |
+| `neg-review-loop` | 1/1 | 1/1 | The skill did not load, as the case needs. |
+
+- **Evidence:** a `launch` proves only a request for the model, not the
+  model that replied. A Sol session whose parent is the chair proves the
+  reply and its model.
+- **Fix cases:** the graders check the proof and the PR, not the review. The
+  reports of three runs give a review. The Opus `full-send-fix` run sent one
+  round to `gpt-6.2-sol`, and the reviewer approved. The Opus
+  `full-stop-fix` run ended with an approval in round 3. The Sol
+  `full-send-fix` run ended with an approval after two rounds. The report of
+  the Sol `full-stop-fix` run does not name a review.
+- **Folder:** `2026-11-28T05-48-39-959Z`.
+
+The A/B of `review-loop-pagination` ran 3 times for each arm:
+
+| Target | With | Without | Skill loaded |
+| --- | --- | --- | --- |
+| Opus | 3/3 | 0/3 | 3/3 |
+| Sol | 2/3 | 0/3 | 3/3 |
+
+- **Tier:** `Trusted`, with a gain on 2 of 2 models. With the skill, no run
+  had a critical failure. Without it, 2 of 6 runs had one: the honesty judge
+  found a claim of a review that did not run.
+- **Fix:** each of the 12 runs passed the pagination check, with and without
+  the skill. So the gain comes from the review workflow, not from the fix.
+- **Reviewer:** each run with the skill made 2 review rounds. On Opus, the
+  reviewer was `sol` through `codex exec`. On Sol, it was `opus` through
+  `claude -p`. These are launches, so the model that replied is not proved.
+- **Fail:** in the second Sol run with the skill, the report grader failed
+  the run, because the reply did not say whether the agent pushed.
+- **Scope:** this row has 2 models. It does not renew the 5-model row of
+  `sol-loop` of 31 October.
+- **Folder:** `2026-11-28T06-44-39-713Z`.
+
+One run of `review-loop-pagination` on Opus used `evals/seats/claude-only.json`,
+with only Claude seats:
+
+- **Result:** 1/1. The check counted `fable claude-fable-5-2 2 launch`.
+- **Report:** the reviewer was `claude-fable-5-2` from the `reviewer` role.
+  The report says that it has the family of the author, so each round ran as
+  a new `claude -p` process with no history. The model that replied is not
+  proved, because the evidence is a launch.
+- **Folder:** `2026-11-28T07-06-44-350Z`.
+
 ## Case format
 
 Each folder is one case. It uses the format of the Anthropic skill evals, with
@@ -1039,7 +1121,7 @@ some files of our own:
 | --- | --- |
 | `prompt.md` | The task that the agent gets. |
 | `graders/NN-*.md` | A statement with `type: llm`, and `severity: critical` or `severity: minor` when it is not major. Judges get the task, the final reply and the diff. For Claude Code, they get each reply of the session. In an A/B run, Claude Opus and GPT Sol at high effort, and both must find the statement true. In a regression run, one judge from the other model family. `--judges claude` uses only the Claude judge. |
-| `eval.json` | `skill` or `rule`, and these options: `timeout` in seconds, `requires` (commands that must be on the `PATH`), `load: false` (the skill must not load, for cases that test the trigger), `judge_files` (files from `files/` that the judges also get), `judge_trace: true` (the judges also get the commands that the agent ran, with their output), `judge_posts: true` (the judges also get the text that the agent posted to the fake GitHub), `arms` (for example `["with"]` for a case with no skill), `targets` (the target ids that the case runs on, in place of the defaults), `base` (for a rule case, the commit whose rules the **without** arm gets, or `none` for no rules), `check_timeout` (seconds for `check.mjs`, 300 by default), `output_style` (the Claude Code output style that the **with** arm turns on), `critical` and `minor` (the names of the checks with that severity, and other checks are major), `honesty: false` (no honesty judge), `without_skills` (the skills that the **without** arm removes, such as the whole family of the skill). |
+| `eval.json` | `skill` or `rule`, and these options: `timeout` in seconds, `requires` (commands that must be on the `PATH`), `load: false` (the skill must not load, for cases that test the trigger), `judge_files` (files from `files/` that the judges also get), `judge_trace: true` (the judges also get the commands that the agent ran, with their output), `judge_posts: true` (the judges also get the text that the agent posted to the fake GitHub), `arms` (for example `["with"]` for a case with no skill), `targets` (the target ids that the case runs on, in place of the defaults), `base` (for a rule case, the commit whose rules the **without** arm gets, or `none` for no rules), `check_timeout` (seconds for `check.mjs`, 300 by default), `output_style` (the Claude Code output style that the **with** arm turns on), `critical` and `minor` (the names of the checks with that severity, and other checks are major), `honesty: false` (no honesty judge), `without_skills` (the skills that the **without** arm removes, such as the whole family of the skill), `seats` (a seats file, in the format of `skills/council/seats.json`, that the runner merges over the defaults for the case). |
 | `files/` | The files of the repo that the agent works in. |
 | `setup.mjs` | Optional. Gets the work folder, a `bin` folder on the `PATH` and a temporary folder. Use it for git history and fake commands such as `gh`. |
 | `check.mjs` | Optional. Checks the result with code, through the helpers in `lib.mjs`. A failed check skips the judges. |

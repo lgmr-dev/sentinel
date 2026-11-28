@@ -28,9 +28,9 @@ T3 thread shows it too.
 | `full-send` | All, with the merge | `Merged` |
 | `paused` | none | `Paused` |
 
-The playbook runs the skills `council`, `sol-loop`, `full-stop`, `verify-pr`
+The playbook runs the skills `council`, `review-loop`, `full-stop`, `verify-pr`
 and `full-send` without a change to them. A CI job, `patrol-verify`, tests each
-PR with an agent from another model family.
+PR with a Codex agent.
 
 ## Adopt
 
@@ -57,12 +57,17 @@ PR with an agent from another model family.
    the user asks:
    1. Install the Sentinel skills of the `core` and `ops` profiles on the
       host. The playbook runs skills from both.
-   2. Write `~/.config/sentinel/seats.json`. It maps each seat name of
-      `patrol.json`, the lead and each council seat, to a model, as in the
-      example below. A seat name is only an alias. Each host maps it to a
-      model, so a host can map `opus` to another Opus version with no config
-      change. Write a `family` only for a model that you checked. The tester
-      is the first seat with a family other than the lead.
+   2. Write `$XDG_CONFIG_HOME/sentinel/seats.json`, or
+      `~/.config/sentinel/seats.json` when `XDG_CONFIG_HOME` is not set. It
+      maps each seat name of `patrol.json`, the lead and each council seat, to
+      a model, as in the example below. A seat name is only an alias. Each
+      host maps it to a model, so a host can map `opus` to another Opus
+      version with no config change. Write a `family` only for a model that
+      you checked. Leave out `track` to pin a seat.
+
+      The tester is the first seat with a family other than the lead. With
+      `council.one_family`, the tester can have the family of the lead. Then
+      its entry also needs `provider` and `effort`.
    3. Run `node tools/patrol/patrol.mjs init` once. It makes the labels and
       the pinned log issue.
    4. Start one run by hand: open a new thread with the model of the lead in
@@ -76,10 +81,10 @@ PR with an agent from another model family.
 ```json
 {
   "models": {
-    "opus": { "provider": "claude", "model": "claude-opus-5-5", "family": "claude", "effort": "high" },
-    "fable": { "provider": "claude", "model": "claude-fable-5-2", "family": "claude", "effort": "high" },
-    "astra": { "provider": "codex", "model": "gpt-6.2-astra", "family": "gpt", "effort": "high" },
-    "muse": { "provider": "muse", "model": "muse-wonder-full-1.0", "family": "muse", "effort": "high" }
+    "opus": { "provider": "claude", "model": "claude-opus-5-5", "track": "claude-opus-*", "family": "claude", "effort": "high" },
+    "fable": { "provider": "claude", "model": "claude-fable-5-2", "track": "claude-fable-*", "family": "claude", "effort": "high" },
+    "sol": { "provider": "codex", "model": "gpt-6.2-sol", "track": "gpt-*-sol", "family": "gpt", "effort": "high" },
+    "muse": { "provider": "muse", "model": "muse-wonder-full-1.0", "track": "muse-wonder-full-*", "family": "muse", "effort": "high" }
   }
 }
 ```
@@ -98,11 +103,11 @@ other template values are safe defaults.
 | --- | --- | --- |
 | `forge` | `kind` (`github`, `gitlab` or `azure`) and `base`. GitLab adds `api_url` and `project_id`, and the host needs `PATROL_GITLAB_TOKEN`. Azure DevOps adds `organization`, `project`, `repository`, `work_item_type` and `closed_state`. | `github`, `main` |
 | `mode` | `demo`, `full-stop`, `full-send` or `paused` | `demo` |
-| `lead`, `council.seats` | Seat names from `seats.json` | Lead `opus`, seats `fable`, `astra` and `muse` |
-| `review` | `sol-loop`, `both` or `council`: the review of the patch | `both` |
+| `lead`, `council.seats` | Seat names from `seats.json` | Lead `opus`, seats `fable`, `sol` and `muse` |
+| `review` | `review-loop`, `both` or `council`: the review of the patch | `both` |
 | `scan.max_findings` | The most new defects in one run | 10 |
 | `budget` | `plans_per_run`, `fixes_per_day` and `council_calls_per_run` | 2, 1, 60 |
-| `council` | `threshold`, `rounds` and `triage_quorum` | 9.0, 3, 2 |
+| `council` | `threshold`, `rounds`, `triage_quorum` and the optional `one_family`. With `one_family: true` and no seat of another family, the run keeps its mode and uses the first seat with the family of the lead and another model as the tester. Then `full-send` merges with no tester of another family. For it, keep `review` `both` and at least one check in `merge.required_checks`, and read some `full-stop` runs first. Use `full-send` only behind branch protection, as [Safety](#safety) says. When you remove the key, a run ends as `Needs owner` at its next gate. | 9.0, 3, 2, no `one_family` |
 | `limits` | `attempts`, `lock_stale_minutes`, `max_files` and `max_lines` | 3, 120, 40, 2000 |
 | `ranking.groups` | The defect groups, each with a `name`, an `impact` from 0 to 5 and examples | Placeholder groups |
 | `owner_gates` | Paths that stop at `Ready for owner`, also in `full-send`. Each gate has `paths` and a `reason`. | None |

@@ -135,8 +135,8 @@ agent can also load each skill when its description fits the task.
 |---|---|---|
 | `full-send` | "full send" | The agent does the work, proves it, files the pull request and merges it when the checks of the branch protection pass. |
 | `full-stop` | "full stop" | The agent stops when the pull request is ready for you to merge. |
-| `sol-loop` | "sol loop" | GPT Sol reviews the change in a loop until both agents agree. |
-| `council` | "council" | Claude Fable 5.2, GPT-6.2 Sol and Muse Wonder Full review until they agree, for 3 rounds by default. Each model runs at high effort by default. Name fewer seats, other models, efforts or limits in the request. |
+| `review-loop` | "review loop" or "sol loop" | A reviewer from the `reviewer` role of the seats file reviews the change in a loop until both agents agree. A model of another family goes first. |
+| `council` | "council" | The seats of the `council` role review until they agree, for 3 rounds by default. The default seats are `fable`, `sol` and `muse`, each at high effort. Name fewer seats, other models, efforts or limits in the request. |
 | `council` | "arena", or a design request to the council | Each model writes its own plan. A judge scores the plans without model names. The agent merges the best parts into one plan. |
 | `file-pr` | "file a PR" | The agent files a short pull request. |
 | `babysit-pr` | "babysit" | The agent watches CI and review bots and fixes real findings. |
@@ -149,8 +149,13 @@ agent can also load each skill when its description fits the task.
 | `tldr` | "tldr" | A short version that keeps each fact that you need to decide or act. |
 | `technical-writing` | "simplify this", "STE" | Docs, PR text and rewrites in simple technical English, without AI patterns. |
 
-At xhigh, `council`, `cleanup`, `no-comments`, `sol-loop`, `technical-writing`
-and the rules for comments and cleanup changed the result on 4 or 5 models.
+`skills/council/seats.json` holds the default seats and roles.
+`council` and `review-loop` read them with `skills/council/scripts/seat.mjs`.
+So these two skills, and the `core` profile, need Node 22 or later.
+
+At xhigh, `council`, `cleanup`, `no-comments`, `review-loop` (as `sol-loop`,
+31 October 2026), `technical-writing` and the rules for comments and cleanup
+changed the result on 4 or 5 models.
 `statechart` changed it on 2 or 3 models.
 See [evals/README.md](evals/README.md).
 
@@ -214,6 +219,103 @@ To add the UI skills to one repository only:
 tools/install --project ../web-app --hosts all --skills ui --no-rules
 ```
 
+## Seats
+
+A seat is a model that `council`, `review-loop` or Patrol starts. You do not
+have to change the seats. The defaults ship with the install. A seat with
+`track` follows the newest model of its line when the route lists its models.
+The T3 list is short. When it leaves out the newest model, the seat takes the
+newest listed model.
+
+To change the seats, write one file: `$XDG_CONFIG_HOME/sentinel/seats.json`.
+With no `XDG_CONFIG_HOME`, the file is `~/.config/sentinel/seats.json`.
+`council`, `review-loop` and Patrol read it. A repository cannot change it.
+
+For `council` and `review-loop`, write only the entries and roles that you
+change. Each other entry and role comes from the defaults. Write a `family`
+when you change a `model` or a `provider`. When the new model has another
+family, also write its `provider`. An entry with a `model` and no `track` is a
+pin. To follow a line, also write the `track`.
+
+Patrol reads no defaults. The host file needs an entry with a `model` for the
+lead and for each council seat of `patrol.json`. Write a `family` only for a
+model that you checked. A same-family tester also needs `provider` and
+`effort`. Patrol ignores `track`, but `council` and `review-loop` read the same
+entries. So add `track` to each full entry that must follow its line.
+
+When you change the model of the lead, also change the model of the scheduled
+task. The stock `patrol-verify` job runs Codex, so it needs an OpenAI key.
+
+To see the seats after the merge, or the error, run this command. Take the
+skills folder of your host from "Where the files go".
+
+```sh
+node <skills folder>/council/scripts/seat.mjs resolve council
+```
+
+The report of each skill gives the ID that the run used, and its `source`.
+
+Run the installer to get new default `model` IDs, as "Updates" says. The
+routes that list no models use them: the Claude CLI and Muse. A user entry
+with a `model` keeps that `model`, and Patrol uses it. Change it by hand for a
+new model.
+
+To change the seats for one run, name the members or the effort in the
+request, as the `council` skill says. For `review-loop`, name the reviewer. For
+a pinned seat, name the provider, the model and the effort.
+
+Pin `sol` to GPT-6.1 Sol:
+
+```json
+{ "models": { "sol": { "model": "gpt-6.1-sol", "family": "gpt" } } }
+```
+
+Remove Muse from the council:
+
+```json
+{ "roles": { "council": ["fable", "sol"] } }
+```
+
+Use only Claude models:
+
+```json
+{
+  "models": {
+    "fable": { "provider": "claude", "model": "claude-fable-5-2", "track": "claude-fable-*", "family": "claude", "effort": "high" },
+    "opus": { "provider": "claude", "model": "claude-opus-5-5", "track": "claude-opus-*", "family": "claude", "effort": "high" }
+  },
+  "roles": {
+    "reviewer": ["fable", "opus"],
+    "council": ["fable", "opus"]
+  }
+}
+```
+
+For Patrol with one family, set these keys in `patrol.json`: `mode` to
+`full-stop`, `lead` to `opus`, `council.seats` to `["fable", "opus"]`,
+`council.triage_quorum` to 2 or less, and `council.one_family` to `true`. The
+template starts in `demo`. The tester is then `fable`, with the family of the
+lead.
+
+To merge with no person, set `mode` to `full-send`. Then the scheduled run has
+no tester of another family. The CI job `patrol-verify` runs Codex on the PR.
+On GitHub, it skips drafts and PRs from forks. On a setup with only GPT models,
+it has the family of the lead too.
+
+Keep `review` `both` and at least one check in `merge.required_checks`. With
+`review-loop` and no checks, the only test proof of the gate is the
+`verify: pass` of the current head. The gate also checks the mode,
+`patrol:hold`, the diff limits, the PR state and head, and the owner gates.
+Before you change to `full-send`, read some `full-stop` runs that end as
+`Ready for owner`. Each handoff must give a tester pass at the final PR head
+and name the launch of the same-family tester.
+
+Use a lower effort for `fable`:
+
+```json
+{ "models": { "fable": { "effort": "medium" } } }
+```
+
 ## Updates
 
 A bot compares tstack, pstack, Impeccable and Frontend-design with their pins each
@@ -221,6 +323,23 @@ Monday. When an imported file changes, the bot opens a draft pull request with
 the new pins and the full diff. It merges each upstream change into the
 Sentinel edits of that file. After you merge the pull request, pull this
 repository and run the installer again.
+
+A repository with `patrol` needs more steps. An old playbook asks for
+`sol-loop`, and its step 1.4 then ends the run as `Incomplete`. A scheduled
+run reads only the playbook. Do these steps in this order:
+
+1. Pause the scheduled task.
+2. Run the installer.
+3. Copy the new `playbook.md` and `patrol.mjs` to `tools/patrol/` in each
+   repository, and merge them into the default branch. Copy both, because an
+   old `patrol.mjs` refuses the review value `review-loop`. A scheduled run
+   checks out `origin/HEAD`, so a local copy has no effect.
+4. If the `patrol.json` of the repository names a seat that the host seats
+   file does not define, add the entry. Patrol reads only the host file. The
+   Patrol of Sentinel now names the seat `sol`. Without a `sol` entry, `start`
+   gives "the seat sol is not in seats.json". Add `track` to each entry that
+   must follow its line. An entry with `model` and no `track` is a pin.
+5. Start the scheduled task again.
 
 ## Known limits
 

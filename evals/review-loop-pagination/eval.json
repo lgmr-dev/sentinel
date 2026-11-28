@@ -1,0 +1,1 @@
+{"skill": "review-loop", "timeout": 2400, "requires": ["codex", "claude"], "without_skills": ["review-loop", "council"], "critical": ["does not push"]}

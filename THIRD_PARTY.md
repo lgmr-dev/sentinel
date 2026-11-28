@@ -7,7 +7,7 @@ the SHA-256 of each imported file. A file that Sentinel changed also has a
 
 | Skills | Source | License |
 |---|---|---|
-| babysit-pr, council, file-pr, full-send, full-stop, leaving-pr-comments, modernize, sol-loop | [t3dotgg/tstack](https://github.com/t3dotgg/tstack) | MIT |
+| babysit-pr, council, file-pr, full-send, full-stop, leaving-pr-comments, modernize, review-loop (from `sol-loop`, with local changes. `node tools/upstream.mjs --update` merges each upstream change.) | [t3dotgg/tstack](https://github.com/t3dotgg/tstack) | MIT |
 | technical-writing, statechart | [cursor/plugins](https://github.com/cursor/plugins/tree/main/pstack) (pstack) | MIT |
 | impeccable | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Apache 2.0, with `NOTICE.md` |
 | frontend-design | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/frontend-design) | Apache 2.0 |
@@ -22,7 +22,7 @@ covers the iOS and Android references from ehmo's
 Sentinel keeps the T3 Code routes of the tstack skills and adds commands for
 the other CLIs. `pr-wait` runs on Windows, and it waits for the requested
 reviewers instead of named review bots. Council stops after 3 rounds by
-default. Council and sol-loop start each reviewer at high effort by default. The Impeccable skill has one
+default. Council and review-loop start each reviewer at high effort by default. The Impeccable skill has one
 added note about updates, and that note says that Sentinel added it.
 
 `technical-writing` holds the pstack `unslop` skill as `unslop.md`, and adds a
@@ -32,13 +32,14 @@ so that agents can load them. It replaces the Cursor model routes with the
 subagents of the host, and the `.cursor` folders with the project skill folders
 of each host. `statechart` reports a replayed violation as a bug.
 
-Council runs Claude Fable 5.2, GPT-6.2 Sol and Muse Wonder Full by default, one
-seat each. It uses only the members that the user names. It fills extra seats
+Sentinel adds `seats.json` and `scripts/seat.mjs` to council. Council runs the
+seats of the `council` role, one seat each, and `seats.json` holds the
+defaults. It uses only the members that the user names. It fills extra seats
 with copies in the order of the user's list, and it checks the `PATH` for each
 CLI. It has a design mode. It puts its results in the description of a PR only
 when the task lets it change that PR.
 
-File-pr, council, sol-loop and leaving-pr-comments write no attribution when
+File-pr, council, review-loop and leaving-pr-comments write no attribution when
 `git config --get sentinel.attribution` prints `off`.
 
 Sentinel wrote beast-ui, cleanup, doc-view, no-comments, tldr and untangle.

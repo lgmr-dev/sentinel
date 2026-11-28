@@ -271,10 +271,12 @@ export function checkConfig(config) {
   const problems = [];
   if (config.version !== 1) problems.push('version 1');
   if (rank(config.mode) < 0) problems.push(`a mode of ${MODES.join(', ')}`);
-  if (!['sol-loop', 'both', 'council'].includes(config.review)) problems.push('a review of sol-loop, both or council');
+  if (config.review === 'sol-loop') config.review = 'review-loop';
+  if (!['review-loop', 'both', 'council'].includes(config.review)) problems.push('a review of review-loop, both or council');
   if (!Array.isArray(config.council?.seats) || !config.council.seats.length) problems.push('council.seats');
   const filled = value => typeof value === 'string' && value.trim() !== '';
   if (!forges[config.forge?.kind] || !filled(config.forge.base)) problems.push('forge.kind and forge.base');
+  if (![undefined, true, false].includes(config.council?.one_family)) problems.push('a council.one_family of true or false');
   if (!(config.council?.triage_quorum >= 1 && config.council.triage_quorum <= config.council.seats?.length)) problems.push('a council.triage_quorum from 1 to the number of seats');
   if (!Array.isArray(config.merge?.required_checks) || !filled(config.merge.method)) problems.push('merge.method and merge.required_checks');
   const gate = g => Array.isArray(g?.paths) && g.paths.length && g.paths.every(filled) && filled(g.reason);
@@ -463,9 +465,14 @@ export function start({ id, model, config, commit, models, ...deps }) {
   for (const seat of config.council.seats) if (!models[seat]) problems.push(`the seat ${seat} is not in seats.json`);
   const log = forge.issues(LABELS.log)[0];
   if (!log) problems.push('no open issue has the label patrol:log. Run init.');
-  const tester = config.council.seats.find(s => models[s]?.family && lead?.family && models[s].family !== lead.family) ?? null;
+  const other = config.council.seats.find(s => models[s]?.family && lead?.family && models[s].family !== lead.family);
+  const same = !other && config.council.one_family === true
+    ? config.council.seats.find(s => s !== config.lead && models[s]?.family && models[s].family === lead?.family && models[s].model !== lead.model) : undefined;
+  const tester = other ?? same ?? null;
   const mode = !tester && rank(config.mode) > rank('demo') ? 'demo' : config.mode;
-  Object.assign(rec, { repo: path.basename(repoName(cwd)), commit, config, mode, review: config.review, lead: config.lead, tester,
+  const missing = same ? ['provider', 'model', 'effort'].filter(key => !models[same][key]) : [];
+  if (missing.length && rank(mode) > rank('demo')) problems.push(`the same family tester ${same} needs ${missing.join(', ')} in seats.json`);
+  Object.assign(rec, { repo: path.basename(repoName(cwd)), commit, config, mode, review: config.review, lead: config.lead, tester, ...(same && { same_family: true }),
     seats: Object.fromEntries([config.lead, ...config.council.seats].filter(s => models[s]).map(s => [s, models[s]])) });
   if (log) rec.log = { issue: log.id, note: forge.addNote(log.id, 'patrol: a run starts.') };
   rec.steps.Start = { status: 'now', text: `config ${createHash('sha256').update(JSON.stringify(config)).digest('hex').slice(0, 4)} · lock taken` };
@@ -495,10 +502,10 @@ export function start({ id, model, config, commit, models, ...deps }) {
   }
   const fixes = runsOnLog(forge, rec).filter(r => r.fixed && sameDay(r.started, deps.now)).length;
   rec.prs = prs;
-  rec.steps.Start = { status: 'done', text: `${rec.steps.Start.text}${mode !== config.mode ? ' · no tester, so demo' : ''}` };
+  rec.steps.Start = { status: 'done', text: `${rec.steps.Start.text}${mode !== config.mode ? ' · no tester, so demo' : ''}${rec.same_family ? ' · one family' : ''}` };
   const next = waiting(rec, forge);
   save(rec, deps);
-  return { run: rec.id, mode, review: rec.review, lead: rec.lead, tester, seats: rec.seats, config, log: log.id, fixes_today: fixes, ...next, prs };
+  return { run: rec.id, mode, review: rec.review, lead: rec.lead, tester, ...(rec.same_family && { same_family: true }), seats: rec.seats, config, log: log.id, fixes_today: fixes, ...next, prs };
 }
 
 function waiting(rec, forge) {
@@ -671,6 +678,7 @@ export function gate({ id, stage, live, ...deps }) {
   const rec = open(id, deps, true), { forge, cwd } = deps, c = rec.config;
   if (!['push', 'handoff', 'merge'].includes(stage)) throw new Error('--stage must be push, handoff or merge');
   if (!rec.issue) throw new Error('gate needs a claimed issue');
+  if (rec.same_family && live.council.one_family !== true) throw new Ended(finish(rec, 'Needs owner', deps, 'council.one_family is not true'));
   const mode = MODES[Math.min(rank(rec.mode), rank(live.mode))];
   const problems = [];
   if (rank(mode) < rank(stage === 'merge' ? 'full-send' : 'full-stop')) problems.push(`the mode is ${mode}`);
@@ -739,10 +747,10 @@ export function record({ id, step, data, pr, outcome, reason, calls, ...deps }) 
 
 export function card(rec) {
   const c = rec.config;
-  const off = row => (OFF[rec.mode] ?? []).includes(row) || (row === 'Review' && rec.review === 'sol-loop');
+  const off = row => (OFF[rec.mode] ?? []).includes(row) || (row === 'Review' && ['review-loop', 'sol-loop'].includes(rec.review));
   const row = (name, step) => {
     const mark = step ? MARKS[step.status ?? 'done'] : off(name) ? '-' : ' ';
-    const why = !off(name) ? '' : (OFF[rec.mode] ?? []).includes(name) ? `off in ${rec.mode} mode` : 'off, review is sol-loop';
+    const why = !off(name) ? '' : (OFF[rec.mode] ?? []).includes(name) ? `off in ${rec.mode} mode` : `off, review is ${rec.review}`;
     const words = step ? [step.text && flat(step.text), step.scores && `${step.round ? `round ${step.round} · ` : ''}${scores(step.scores)}`,
       step.verify && `verify-pr ${step.verify} at ${String(step.verify_head).slice(0, 7)}`].filter(Boolean).join(' · ') : why;
     return ` [${mark}] ${name.padEnd(9)} ${words}`.trimEnd();
@@ -750,7 +758,7 @@ export function card(rec) {
   const lines = [`Patrol · ${rec.repo ?? '?'} · ${rec.mode ?? '?'} · review ${rec.review ?? '?'} · origin/${c?.forge.base ?? '?'} ${String(rec.commit ?? '').slice(0, 7)} · ${new Date(rec.started).toISOString().slice(11, 16)} UTC`];
   if (rec.seats) {
     const family = seat => rec.seats[seat]?.family ?? 'unknown';
-    lines.push(`Lead ${rec.lead} (${family(rec.lead)}) · seats ${c.council.seats.join(', ')} · tester ${rec.tester ? `${rec.tester} (${family(rec.tester)})` : 'none'}`);
+    lines.push(`Lead ${rec.lead} (${family(rec.lead)}) · seats ${c.council.seats.join(', ')} · tester ${rec.tester ? `${rec.tester} (${family(rec.tester)}${rec.same_family ? ', same family' : ''})` : 'none'}`);
   }
   for (const name of ROWS) lines.push(row(name, rec.steps[name]));
   if (rec.issue) {

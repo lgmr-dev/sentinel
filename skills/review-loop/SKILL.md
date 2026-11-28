@@ -1,15 +1,15 @@
 ---
-name: sol-loop
-description: Use when the user says "sol loop".
+name: review-loop
+description: Use when the user says "review loop" or "sol loop".
 ---
 
-# sol-loop
+# review-loop
 
 This is a workflow for making your code changes more correct before (or
-sometimes after) filing a pull request. tl;dr - use OpenAI's GPT Sol to review
+sometimes after) filing a pull request. tl;dr - use the reviewer of the seats file to review
 your code in a loop.
 
-Make the most minimal possible changes to appease the Sol reviewers. Be careful
+Make the most minimal possible changes to appease the reviewers. Be careful
 of scope creep and don't be scared to push back.
 
 ## Budget
@@ -21,7 +21,7 @@ of scope creep and don't be scared to push back.
   the user asks.
 - Stop early if a round returns only nits. Declined nits and comment,
   doc, or format-only fixes need no new round.
-- One reviewer only. Sol must not start subagents or reviewers.
+- One reviewer only. The reviewer must not start subagents or reviewers.
 - Keep a ledger: id, severity, outcome, usage if returned. Never guess it.
 
 ## 1. Scope
@@ -45,10 +45,56 @@ Use one diff command all rounds. State intent and out-of-scope in 1-2
 sentences. Run covering checks. Do not send code this change breaks. Note
 missing or pre-failing checks in the brief.
 
-## 2. Start Sol
+## 2. Start the reviewer
 
-In T3, call `orchestrator_capabilities`. Pick the latest Sol unless the user
-named a version. Do not hardcode an ID. Use `high` effort unless the user names
+Pick the reviewer from the seats file. `seat.mjs` is in the `council` skill
+folder next to this skill folder. Run it as
+`node <council skill folder>/scripts/seat.mjs resolve reviewer ...`.
+The trigger "sol loop" names this skill, not the seat `sol`. The reviewer
+comes from the `reviewer` role. To get Sol, the user names Sol.
+
+- If the user names the reviewer by provider, model, and effort, use it. Do
+  not run `seat.mjs`.
+- If the user gives an exact model ID, use that ID. If the user also gives a
+  seat name of the seats file, take the other fields from that entry.
+- If the user gives only a seat name of the seats file, run
+  `seat.mjs resolve reviewer --names <name>`.
+- If the user names only a Sol version, such as "Sol 6.1", run
+  `seat.mjs resolve reviewer --names sol`. Put the version in place of `*` in
+  its `track`, and start only that ID. For another one-run change, name the
+  reviewer by provider, model, and effort.
+- If the user names a reviewer that is neither a seat name of the seats file nor a model ID, report it and start no
+  model. Do not guess an ID. An ID that the model list of the route gives for
+  that name is not a guess.
+- Else run `seat.mjs resolve reviewer --author-family <family>`. Your family is
+  `claude` for a Claude model, `gpt` for a GPT model and `muse` for a Muse
+  model. On a model of another family, leave out `--author-family`. Take the
+  first member that a route can start. If no route runs the provider of a
+  member, take the next member and report the skip.
+
+When the route lists its models, add one `--available <provider>=<id>,<id>...`
+for each provider. Use the `provider` value of the seats file, such as `claude`
+for the T3 provider `claudeAgent`. A seat with `track` then takes the newest
+listed ID of its line, with `source: track`. Without a list or a match, it keeps
+its `model`, with `source: model`. In T3, use the IDs of the one
+`orchestrator_capabilities` call that the host lets you make before the first
+`delegate_task`. The T3 list is short. When it leaves out the newest model, the
+seat takes the newest listed model. For one exact reviewer, give its ID as
+`search` in that call. In Codex, the native subagent route and `codex exec`
+take the `slug` of each model with `visibility` `list`:
+
+```sh
+codex debug models | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).models.filter(m=>m.visibility==="list").map(m=>m.slug).join(",")))'
+```
+
+Start a pinned ID, a named ID or an ID with `source: model` with no list check.
+If a named member, a named version or its start fails, report it and stop. Do
+not take the next member. If `seat.mjs` exits with an error, or if `node` does
+not run, report the message. Do not guess the reviewer. If the reviewer has
+your family, start it in a fresh context.
+
+In T3, call `orchestrator_capabilities`. Pick the reviewer as above unless the user
+named one. Do not hardcode an ID. Use the `effort` of the seat unless the user names
 another effort. Record provider, model, and effort
 only if exposed. Use `delegate_task` every round (`role: "review"`,
 `mode: "async"`). Save `taskId`. New `clientRequestId` per round.
@@ -56,12 +102,12 @@ only if exposed. Use `delegate_task` every round (`role: "review"`,
 `t3_thread_send`, `create_threads`, or `t3_thread_launch` for review.
 
 In T3 Code, if its tools are not listed, try one direct capability call. Outside T3, use
-a native Sol subagent and keep its ID. In Claude Code, use a custom subagent
-only if it is set up to run Sol. Otherwise, start each round as a background
-command with the brief on stdin:
-`codex exec --sandbox read-only --model <Sol ID> -c model_reasoning_effort=<effort> -`.
-Without the Codex CLI, use another CLI from the `council` skill that runs Sol.
-If no route runs Sol, report the blocker. Do not substitute a model.
+a native subagent that can select the exact ID and keep its ID. In Claude Code, use a custom subagent
+only if it is set up to run that ID. Otherwise, start each round as a background
+command with the brief on stdin, such as `claude -p --model <ID> ...` from the `council` skill or
+`codex exec --sandbox read-only --model <ID> -c model_reasoning_effort=<effort> -`.
+Without that CLI, use another CLI from the `council` skill that runs the ID.
+If no route runs any member, report the blocker. Do not substitute a model.
 
 Do not edit scoped files while review runs. Wait for the notice. Do not
 poll or start a second reviewer. Timeout, error, or no reply is not
@@ -103,7 +149,7 @@ Start one only if budget remains and a blocker or should is open, behavior code
 changed, or approval does not cover the current behavior diff. Use a fresh
 `delegate_task` in T3 or a fresh CLI round, or follow up the saved native ID. Send the round 1 brief,
 the ledger (`fixed:` / `disagree:` / `declined:` + evidence), the same base
-diff, and the change since last round. Tell Sol: open ids and changed code only.
+diff, and the change since last round. Tell the reviewer: open ids and changed code only.
 Mark each old id `resolved` or `still open: <reason>`.
 
 ## 5. Stop and ship
@@ -117,12 +163,12 @@ Do not push during the loop. Push after agreement only if the user asked
 to push, ship, or update the PR. If you push to a PR, add above the model
 blurb:
 
-`Reviewed with sol-loop: <N> rounds with <model>. Sol verdict: approved`.
+`Reviewed with review-loop: <N> rounds with <model>. Verdict: approved`.
 
 Add `on <effort>` only if verified. Skip this line when
 `git config --get sentinel.attribution` prints `off`.
 
-Report: rounds, model, what Sol changed, diff size before/after, fixed and
+Report: rounds, model ID and `source`, if the reviewer has your family, what the reviewer changed, diff size before/after, fixed and
 declined findings with reasons, usage if exposed (else say not), pushed or not.
 Put your own findings in the same ledger. For each finding that you did not
-fix, yours or Sol's, give the reason in one line.
+fix, yours or the reviewer's, give the reason in one line.

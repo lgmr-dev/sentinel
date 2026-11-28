@@ -1,1 +1,1 @@
-{ "skill": "council", "timeout": 2400, "requires": ["claude", "codex"] }
+{ "skill": "council", "timeout": 2400, "requires": ["claude", "codex"], "seats": { "roles": { "council": ["fable", "sol"] } } }

@@ -83,7 +83,11 @@ function loadCases(evalsDir) {
   return cases;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+const isMain = import.meta.main ?? (() => {
+  const self = fileURLToPath(import.meta.url);
+  try { return path.resolve(process.argv[1]) === self || fs.realpathSync(process.argv[1]) === self; } catch { return false; }
+})();
+if (isMain) {
   const dirs = process.argv.slice(2);
   if (!dirs.length) { console.error('usage: node tools/trust.mjs <results dir>...'); process.exit(2); }
   const latest = new Map();
@@ -93,5 +97,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const records = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line));
     for (const key of new Set(records.map(r => `${r.case} ${r.target}`))) latest.set(key, records.filter(r => `${r.case} ${r.target}` === key));
   }
-  console.log(trustTable([...latest.values()].flat(), loadCases(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'evals'))));
+  const cases = loadCases(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'evals'));
+  const rows = [...latest.values()].flat();
+  for (const name of new Set(rows.map(r => r.case).filter(name => !cases.some(c => c.name === name)))) console.error(`trust: no case ${name}, so its rows are left out`);
+  console.log(trustTable(rows, cases));
 }
