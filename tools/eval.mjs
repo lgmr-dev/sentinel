@@ -8,7 +8,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { events, executions } from '../evals/lib.mjs';
 import { trustTable, failureList } from './trust.mjs';
-import { checkSeats, mergeSeats } from '../skills/council/scripts/seat.mjs';
+import { checkSeats, mergeSeats, resolve } from '../skills/council/scripts/seat.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const evalsDir = path.join(root, 'evals');
@@ -36,7 +36,7 @@ function options(argv) {
     else if (flag === '--arms') { opts.arms = value.split(','); i++; }
     else if (flag === '--rejudge') { opts.rejudge = value; i++; }
     else if (flag === '--resume') { opts.resume = value; i++; }
-    else if (flag === '--seats') { if (value === undefined) throw new Error('--seats needs a file'); opts.seats = value; i++; }
+    else if (flag === '--seats') { if (!value || value.startsWith('--')) throw new Error('--seats needs a file'); opts.seats = value; i++; }
     else throw new Error(`Unknown option: ${flag}`);
   }
   if (opts.arms && (!opts.ab || opts.arms.some(arm => arm !== 'with' && arm !== 'without'))) throw new Error('--arms needs --ab and takes with, without or both');
@@ -479,9 +479,10 @@ async function main() {
     const given = seatsFlag ?? (testCase.seats && checkSeats(testCase.seats, `the seats of ${testCase.name}`));
     Object.assign(testCase, { runSeats: mergeSeats(defaultSeats, given), seatsWritten: !!given });
     const role = seatRoles[testCase.skill];
-    for (const name of testCase.runSeats.roles[role] ?? []) {
-      if (!testCase.runSeats.models[name]) throw new Error(`${testCase.name}: the seat ${name} of the role ${role} is not in the seats`);
-      const provider = testCase.runSeats.models[name].provider;
+    if (!role) continue;
+    let members;
+    try { members = resolve(testCase.runSeats, role); } catch (error) { throw new Error(`${testCase.name}: ${error.message}`); }
+    for (const { name, provider } of members) {
       if (!loggedClis.includes(provider)) throw new Error(`${testCase.name}: the seat ${name} has the provider ${provider}, but the runner logs only ${loggedClis.join(', ')}`);
     }
   }

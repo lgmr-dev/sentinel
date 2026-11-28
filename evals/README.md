@@ -12,7 +12,7 @@ how badly it can fail.
 | `make eval ARGS="--ab"` | A/B. Each case runs **with** and **without** its skill or rule, on the 5 default models, with both judges. It prints the trust table. Use it for a new or removed skill, a rewrite of a skill, or a new or removed rules section. |
 | `make eval ARGS="--ab --arms without"` | An A/B that runs only the named arm. The **without** arm does not change with the skill, so a climb can run it once and join its `runs.jsonl` with the runs of each new skill text. Put both arms in one folder for `tools/trust.mjs`, because it keeps only the last folder for each case and target. |
 | `make eval ARGS="--ab --no-early-stop --resume <results folder>"` | Copies each run with the status `pass` or `fail` from that folder into the new `runs.jsonl`, and runs only the other runs. It needs `--no-early-stop`. It stops when the folder has two such rows for one run. It copies a row only when its saved `seats` and `seats_written` are the same as those of the new run. Each row saves the merged seats, so a change of the default seats that changes them runs the row again. A row with no saved seats runs again. A first run with early stop gets its runs 2 and 3 on resume. Give the `--case` and `--runs` of the first run again. The files of the copied runs stay in the old folder, so `--rejudge` of the new folder does not find them. |
-| `make eval ARGS="--case <name> --seats <file>"` | Uses the seats file for each case of this run, in place of the `seats` field of the case. |
+| `make eval ARGS="--case <name> --seats <file>"` | Uses the seats file for each case of this run, in place of the `seats` field of the case. `--rejudge` refuses the flag, because a rejudge reads the saved seats. |
 | `node tools/eval.mjs --rejudge <results folder>` | Runs the checks and the judges again on the saved runs, with no agent. Use it after a fix to a check or a judge. |
 | `node tools/trust.mjs <results folder>...` | Prints the trust table of saved A/B runs. |
 
@@ -29,9 +29,10 @@ merge of `skills/council/scripts/seat.mjs`. Each row saves the merged file in
 the file to `home/.config/sentinel/seats.json` in the sandbox only when the
 case or `--seats` gives seats. Other cases keep a clean host.
 
-The runner logs only the `claude`, `codex` and `muse` CLIs. So it stops with an
-error before the first launch when a member of the role of the case has
-another `provider`. The role of a `council` case is `council`, and the role of
+Before the first launch, the runner resolves the role of each case with
+`skills/council/scripts/seat.mjs`. It stops with an error when the role does
+not resolve. The runner logs only the `claude`, `codex` and `muse` CLIs. So it
+also stops when a member of the role of the case has another `provider`. The role of a `council` case is `council`, and the role of
 a `review-loop` case is `reviewer`.
 
 The seat checks read the saved seats of the row, also in a rejudge. They do

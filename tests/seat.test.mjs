@@ -55,6 +55,8 @@ test('a user entry takes the missing provider and effort from the default entry 
   const gpt = { models: { opus: { model: 'gpt-6.1-astra', family: 'gpt' } } };
   assert.match((await seat(['reviewer'], gpt)).error, /the seat opus has no provider/);
   assert.deepEqual(names(await seat(['council'], gpt)), ['fable', 'sol', 'muse']);
+  assert.deepEqual(await opus({ model: 'claude-opus-5-6', family: '' }), { name: 'opus', provider: 'claude', model: 'claude-opus-5-6', effort: 'high', source: 'model' });
+  assert.deepEqual((await seat(['reviewer', '--names', 'sol'], { models: { sol: { family: '' } } })).seats, [{ name: 'sol', provider: 'codex', model: 'gpt-6.2-sol', effort: 'high', source: 'model', track: 'gpt-*-sol' }]);
   assert.deepEqual((await seat(['reviewer', '--names', 'sol'], { models: { sol: { provider: 'copilot' } } })).seats,
     [{ name: 'sol', provider: 'copilot', model: 'gpt-6.2-sol', effort: 'high', source: 'model', track: 'gpt-*-sol' }]);
 });
@@ -105,10 +107,13 @@ test('the examples of the seat guide resolve', async () => {
 
 const faults = [
   ['a user file that is not valid JSON', ['council'], '{ "models": ', /is not valid JSON/],
+  ['a user file that is an array', ['council'], [], /seats\.json is not an object/],
+  ['a user file that is a string', ['council'], '"x"', /seats\.json is not an object/],
   ['models that is not an object', ['council'], { models: [] }, /models in .* is not an object/],
   ['a models entry that is a string', ['council'], { models: { sol: 'gpt-6.3-sol' } }, /the seat sol in .* is not an object/],
   ['a models entry that is null', ['council'], { models: { sol: null } }, /the seat sol in .* is not an object/],
   ['a track that is not a string', ['reviewer'], { models: { sol: { track: 6 } } }, /the track of the seat sol in .* is not a string/],
+  ['a model that is not a string', ['reviewer'], { models: { sol: { model: 6 } } }, /the model of the seat sol in .* is not a string/],
   ['roles that is not an object', ['council'], { roles: 'fable' }, /roles in .* is not an object/],
   ['a role with no members', ['council'], { roles: { council: [] } }, /the role council has no members/],
   ['a role that the file does not define', ['tester'], undefined, /the role tester has no members/],

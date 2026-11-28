@@ -16,7 +16,7 @@ test('--resume needs --no-early-stop', () => {
 });
 
 test('--seats needs a file and has no effect with --rejudge', () => {
-  assert.match(evalTool('--ab', '--targets', 'none', '--seats').stderr, /--seats needs a file/);
+  for (const args of [['--seats'], ['--seats', ''], ['--seats', '--ab']]) assert.match(evalTool('--ab', '--targets', 'none', ...args).stderr, /--seats needs a file/);
   assert.match(evalTool('--rejudge', 'old', '--seats', 'seats.json').stderr, /--seats has no effect with --rejudge/);
 });
 
@@ -24,22 +24,26 @@ test('a run checks the seats before any launch', { skip: process.platform === 'w
   const mark = await fs.mkdtemp(path.join(os.tmpdir(), 'launched-'));
   const { dir, env } = await fakeLogins({ claude: `touch "${path.join(mark, 'claude')}"\nexit 1`, codex: `touch "${path.join(mark, 'codex')}"\nexit 1` });
   const seats = path.join(dir, 'seats.json');
-  const runWith = async user => {
+  const runWith = async (user, name = 'council-review-pr') => {
     await fs.writeFile(seats, JSON.stringify(user));
-    const r = spawnSync(process.execPath, [script, '--case', 'council-review-pr', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'codex', '--seats', seats], { encoding: 'utf8', env });
+    const r = spawnSync(process.execPath, [script, '--case', name, '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'codex', '--seats', seats], { encoding: 'utf8', env });
     return [r.status, r.stderr.trim()];
   };
   const errors = [
     await runWith({ models: [], roles: [] }),
     await runWith({ models: { cop: { provider: 'copilot', model: 'gpt-6.2-sol', effort: 'high' } }, roles: { council: ['cop'] } }),
     await runWith({ roles: { council: ['fable', 'ghost'] } }),
+    await runWith({ roles: { reviewer: [] } }, 'review-loop-pagination'),
+    await runWith({ models: { cx: { provider: 'codex' } }, roles: { reviewer: ['cx'] } }, 'review-loop-pagination'),
   ];
   const launched = await fs.readdir(mark);
   for (const folder of [mark, dir]) await fs.rm(folder, { recursive: true, force: true });
   assert.deepEqual(errors, [
     [1, `eval: models in ${seats} is not an object`],
     [1, 'eval: council-review-pr: the seat cop has the provider copilot, but the runner logs only claude, codex, muse'],
-    [1, 'eval: council-review-pr: the seat ghost of the role council is not in the seats'],
+    [1, 'eval: council-review-pr: the role council names ghost, which models does not define'],
+    [1, 'eval: review-loop-pagination: the role reviewer has no members'],
+    [1, 'eval: review-loop-pagination: the seat cx has no model'],
   ]);
   assert.deepEqual(launched, []);
 });
@@ -222,6 +226,7 @@ test('the review-loop check gives a codex exec launch credit only from a saved r
   const help = { cli: 'codex', args: ['exec', '--model', 'gpt-6.2-sol', '--help'], code: 0, bytes: 400 };
   const withHelp = await reviewer({ launches: [help, solExec()], sessions: [solReply] });
   assert.deepEqual([withHelp.pass, withHelp.detail], [true, 'sol gpt-6.2-sol 1 launch, opus claude-opus-5-5 0 replies']);
+  assert.equal((await reviewer({ launches: [help], sessions: [solReply] })).pass, false);
 });
 
 async function fakeLogins(fakes) {

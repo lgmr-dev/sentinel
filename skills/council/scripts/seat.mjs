@@ -25,7 +25,7 @@ export function mergeSeats(defaults, user) {
   for (const [name, entry] of Object.entries(user?.models ?? {})) {
     const base = defaults.models[name];
     models[name] = !base ? entry : defined({ ...entry,
-      provider: entry.provider ?? (entry.family === undefined || entry.family === base.family ? base.provider : undefined),
+      provider: entry.provider ?? (!entry.family || entry.family === base.family ? base.provider : undefined),
       model: entry.model ?? base.model,
       effort: entry.effort ?? base.effort,
       family: entry.family ?? (entry.model === undefined && entry.provider === undefined ? base.family : undefined),
@@ -62,10 +62,11 @@ export function resolve(seats, role, { authorFamily, available = {}, names } = {
 const isObject = value => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export function checkSeats(seats, file) {
-  for (const key of ['models', 'roles']) if (seats?.[key] !== undefined && !isObject(seats[key])) fail(`${key} in ${file} is not an object`);
-  for (const [name, entry] of Object.entries(seats?.models ?? {})) {
+  if (!isObject(seats)) fail(`${file} is not an object`);
+  for (const key of ['models', 'roles']) if (seats[key] !== undefined && !isObject(seats[key])) fail(`${key} in ${file} is not an object`);
+  for (const [name, entry] of Object.entries(seats.models ?? {})) {
     if (!isObject(entry)) fail(`the seat ${name} in ${file} is not an object`);
-    if (entry.track !== undefined && typeof entry.track !== 'string') fail(`the track of the seat ${name} in ${file} is not a string`);
+    for (const key of ['model', 'track']) if (entry[key] !== undefined && typeof entry[key] !== 'string') fail(`the ${key} of the seat ${name} in ${file} is not a string`);
   }
   return seats;
 }
