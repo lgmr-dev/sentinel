@@ -115,13 +115,13 @@ check_links() {
 
 check_address() {
   local address
-  address="$(LC_ALL=C sed -E 's/^[^ -~]+//; s/([^ -~]|[.])+$//' <<<"$2" | tr '[:upper:]' '[:lower:]')"
+  address="$(LC_ALL=C sed -E 's/^[^ -~]+//; s/[^ -~]+$//' <<<"$2" | tr '[:upper:]' '[:lower:]')"
   [[ "$address" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
 }
 
 check_addresses() {
   local name="$1" text addresses found
-  text="$(sed -E -e "s#$ssh_remote##g" -e "s#$url_user##g" <<<"$2" | LC_ALL=C sed -E -e "s/$separators/ /g" -e :a -e "s/(@[^[:space:]]*)($dots)/\\1./" -e ta -e "s/$dots/ /g")"
+  text="$(sed -E -e "s#$ssh_remote##g" -e "s#$url_user##g" <<<"$2" | LC_ALL=C sed -E -e "s/$separators/ /g" -e :a -e "s/(@[^[:space:]]*)($dots)([A-Za-z0-9])/\\1.\\3/" -e ta -e "s/$dots/ /g")"
   addresses="$(grep -oE "$email" <<<"$text" | grep -viE "$not_address" || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
   while read -r found; do

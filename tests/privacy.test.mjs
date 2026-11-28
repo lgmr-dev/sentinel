@@ -185,7 +185,8 @@ const cLocale = [
   ['example addresses with a non-ASCII last letter before non-ASCII text', `“${addressOf('josé', 'example.com')}” and ${addressOf('josé', 'example.com')}です`, true],
   ['a personal domain with an iteration mark', `Ask ${addressOf('alice', '試々験.jp')}`, false],
   ['a bot address after a Japanese or an English sentence and a full stop', `確認しました。${bot} and Done。${bot}`, true],
-  ['a bot address before a full stop and more text', `by ${bot}。確認`, true],
+  ['a bot address before a full stop and more text', `by ${bot}。確認 and ${bot}を使う。次に`, true],
+  ['an @mention before a full stop and more text', '担当@tanakaさん。よろしく', true],
   ['a personal address after a bot address and a non-ASCII letter', `${addressOf('noreply', 'github.com')}と${addressOf('josé', 'personal-isp.de')}`, false],
 ];
 for (const [name, message, passes] of cLocale) {
