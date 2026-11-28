@@ -97,5 +97,8 @@ if (isMain) {
     const records = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line));
     for (const key of new Set(records.map(r => `${r.case} ${r.target}`))) latest.set(key, records.filter(r => `${r.case} ${r.target}` === key));
   }
-  console.log(trustTable([...latest.values()].flat(), loadCases(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'evals'))));
+  const cases = loadCases(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'evals'));
+  const rows = [...latest.values()].flat();
+  for (const name of new Set(rows.map(r => r.case).filter(name => !cases.some(c => c.name === name)))) console.error(`trust: no case ${name}, so its rows are left out`);
+  console.log(trustTable(rows, cases));
 }

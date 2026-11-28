@@ -745,6 +745,11 @@ test('the card shows each step, grays the steps that the mode turns off, and lis
   assert.ok(lines.includes('Severity 9/10 critical (impact 3) · attempt 1 of 3') || lines.includes('Severity 9/10 critical · attempt 1 of 3'));
   assert.ok(lines.includes(' [x] Plan      round 1 · fable 9'));
   assert.ok(lines.includes(' [-] Review    off, review is review-loop'));
+
+  const old = { ...CONFIG, review: 'sol-loop' };
+  const t3 = setup('github', old);
+  const { run: run3 } = t3.begin(old);
+  assert.ok(card(readRun(run3, t3.d())).split('\n').includes(' [-] Review    off, review is sol-loop'));
   assert.ok(lines.includes(' [-] Merge     off in full-stop mode'));
   assert.ok(lines.includes(' [ ] Fix'));
 });

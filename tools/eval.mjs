@@ -565,7 +565,7 @@ async function rejudge(opts, judgesFor, config) {
     const target = config.targets.find(t => t.id === old.target);
     const artifacts = old.rejudged_from ? path.join(root, old.rejudged_from) : source;
     const dir = path.join(artifacts, old.case, old.target, `${old.arm}-${old.index}`);
-    if (!testCase || !target) continue;
+    if (!testCase || !target) { console.log(`MISSING ${old.case} ${old.target} ${old.arm}#${old.index}: no ${testCase ? 'target' : 'case'} of that name`); continue; }
     if (!existsSync(path.join(dir, 'sandbox.tgz'))) { console.log(`MISSING ${old.case} ${old.target} ${old.arm}#${old.index}: no saved sandbox`); continue; }
     const saved = new Set((old.judged ?? []).flatMap(g => g.verdicts.map(v => v.judge)));
     const kept = config.judges.filter(j => saved.has(j.model) || [...saved].some(model => config.targets.find(t => t.model === model)?.host === j.host));

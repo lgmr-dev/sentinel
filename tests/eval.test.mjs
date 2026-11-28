@@ -92,6 +92,14 @@ test('the trust tool runs its CLI through a symlink', { skip: process.platform =
   assert.deepEqual([r.status, r.stderr], [2, 'usage: node tools/trust.mjs <results dir>...\n']);
 });
 
+test('the trust tool names the rows of a case that no longer exists', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'trust-'));
+  await fs.writeFile(path.join(dir, 'runs.jsonl'), `${JSON.stringify({ case: 'sol-loop-pagination', target: 'opus-5.5-xhigh', arm: 'with', index: 1, status: 'pass' })}\n`);
+  const r = spawnSync(process.execPath, [fileURLToPath(new URL('../tools/trust.mjs', import.meta.url)), dir], { encoding: 'utf8' });
+  await fs.rm(dir, { recursive: true, force: true });
+  assert.deepEqual([r.status, r.stderr], [0, 'trust: no case sol-loop-pagination, so its rows are left out\n']);
+});
+
 async function evalCheck(name, check, { launches = [], wait = false, sessions = [], trace: chairEvents = [], host = 'codex', seats, seatsHome = true, hostSeats }) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'check-'));
   const work = path.join(dir, 'work'), home = path.join(dir, 'home'), sessionDir = path.join(home, '.codex', 'sessions');
@@ -139,6 +147,9 @@ test('the council check counts a Claude seat and a Sol seat that ran the seat mo
   const judge = async options => (await evalCheck('council-design', 'asks a judge from another family', options)).pass;
   assert.equal(await judge({ launches: [fable, fable], sessions: [solSeat] }), true);
   assert.equal(await judge({ launches: [fable], sessions: [solSeat, solSeat] }), false);
+  const claudeOnly = JSON.parse(await fs.readFile(new URL('../evals/seats/claude-only.json', import.meta.url), 'utf8'));
+  const opus = { ...fable, args: ['-p', '--model', 'claude-opus-5-5', '--effort', 'high'] };
+  assert.equal(await judge({ host: 'claude', launches: [fable, opus], seats: claudeOnly }), true);
   assert.equal(await seats({ launches: [fable, fable], sessions: [solSeat] }), true);
   assert.equal(await seats({ launches: [fable, fable, solExec()] }), true);
   assert.equal(await seats({ launches: [{ ...fable, code: 1 }, { ...fable, code: 1 }], sessions: [solSeat] }), false);
