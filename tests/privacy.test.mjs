@@ -159,6 +159,8 @@ const pushes = [
   ['an author field with a public and a personal address', { as: `${noreply} ${personal}` }, false],
   ['a bare upper-case sign-off', { message: `x\n\nSIGNED-OFF-BY: ${personal}` }, false],
   ['a pasted personal mailbox with an https prefix', { message: `Contact https://${mailbox}` }, false],
+  ['a pasted personal mailbox with an https prefix and a slash', { message: `Contact https://${mailbox}/` }, false],
+  ['HTTPS URLs with a user, a Unicode host or a port', { message: `Clone https://${addressOf('dev', 'git.例え.jp')}/team/repo.git or https://${addressOf('dev', 'git.example-corp.net')}:8443` }, true],
   ['a personal address with a Unicode domain', { message: `Ask ${addressOf('alice', 'gmüx.example-isp.de')} for details` }, false],
   ['a personal address with a Unicode local part', { message: `Ask ${addressOf('josé', 'personal-isp.de')}` }, false],
   ['a personal address after a URL query', { message: `See https://example.com?x=${addressOf('alice', 'personal-isp.de')}` }, false],
