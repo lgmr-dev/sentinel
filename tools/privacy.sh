@@ -121,10 +121,10 @@ check_address() {
 check_addresses() {
   local name="$1" text addresses found
   text="$(sed -E -e "s#$ssh_remote##g" -e "s#$url_user#\\1\\2#g" -e "s/$quotes/ /g" <<<"$2")"
-  addresses="$(grep -oE "$email" <<<"$text" | grep -viE "$not_address" || true)"
+  addresses="$(grep -oE "$email" <<<"$text" | grep -viE "$not_address" | LC_ALL=C sed -E 's/^[^ -~]+//; s/[^ -~]+$//' || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
   while read -r found; do
-    [[ -z "$found" ]] || check_address "$name" "$(LC_ALL=C sed -E 's/^[^ -~]+//; s/[^ -~]+$//' <<<"$found")"
+    [[ -z "$found" ]] || check_address "$name" "$found"
   done < <(sort -u <<<"$addresses")
   return 0
 }

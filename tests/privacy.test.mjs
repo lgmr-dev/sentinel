@@ -155,6 +155,7 @@ const pushes = [
   ['an upper-case noreply domain', { as: addressOf('1+a', 'USERS.NOREPLY.GITHUB.COM') }, true],
   ['a git author on a private domain', { as: addressOf('git', 'corp-mail.net') }, false],
   ['a personal address in the author name', { extra: { GIT_AUTHOR_NAME: `A ${personal}` } }, false],
+  ['a co-author trailer with a Unicode domain suffix', { message: `x\n\nCo-authored-by: A <${addressOf('noreply', 'anthropic.com')}。中国>` }, false],
   ['a bot author address with a Unicode domain suffix', { as: `${addressOf('noreply', 'anthropic.com')}。中国` }, false],
   ['an HTTPS URL with a user and a path that starts with a plus', { message: `Clone https://${addressOf('dev', 'git.example-corp.net')}/+team/repo.git` }, true],
   ['a personal author domain that starts with a bot domain', { as: `${addressOf('noreply', 'anthropic.com')}ü.personal-isp.de` }, false],
