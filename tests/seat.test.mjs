@@ -26,13 +26,9 @@ const names = result => result.seats.map(s => s.name);
 const fable = { name: 'fable', provider: 'claude', model: 'claude-fable-5-2', effort: 'high', source: 'model', track: 'claude-fable-*', family: 'claude' };
 const sol = { name: 'sol', provider: 'codex', model: 'gpt-6.2-sol', effort: 'high', source: 'model', track: 'gpt-*-sol', family: 'gpt' };
 const muse = { name: 'muse', provider: 'muse', model: 'muse-wonder-full-1.0', effort: 'high', source: 'model', track: 'muse-wonder-full-*', family: 'muse' };
-const oneFamily = {
-  models: {
-    fable: { provider: 'claude', model: 'claude-fable-5-2', track: 'claude-fable-*', family: 'claude', effort: 'high' },
-    opus: { provider: 'claude', model: 'claude-opus-5-5', track: 'claude-opus-*', family: 'claude', effort: 'high' },
-  },
-  roles: { reviewer: ['fable', 'opus'], council: ['fable', 'opus'] },
-};
+const readme = await fs.readFile(new URL('../README.md', import.meta.url), 'utf8');
+const guide = readme.slice(readme.indexOf('\n## Seats\n'), readme.indexOf('\n## Updates\n'));
+const [pin, noMuse, oneFamily, effort] = [...guide.matchAll(/^```json\n([\s\S]*?)^```$/gm)].map(block => JSON.parse(block[1]));
 
 test('seat runs through a symlink from another folder and prints the shipped defaults', { skip: process.platform === 'win32' }, async () => {
   assert.deepEqual((await seat(['council'], undefined, { run: 'symlink' })).seats, [fable, sol, muse]);
@@ -75,7 +71,6 @@ test('the role validates only its own members', async () => {
 });
 
 test('--names gives the named entries in their order, with no check of the role', async () => {
-  const noMuse = { roles: { council: ['fable', 'sol'] } };
   assert.deepEqual(names(await seat(['council'], noMuse)), ['fable', 'sol']);
   assert.deepEqual(names(await seat(['council', '--names', 'muse,fable'], noMuse)), ['muse', 'fable']);
   assert.deepEqual(names(await seat(['reviewer', '--names', 'sol'], oneFamily)), ['sol']);
@@ -95,12 +90,13 @@ test('--available gives a member with a track the newest listed ID of its provid
 });
 
 test('the examples of the seat guide resolve', async () => {
-  assert.deepEqual((await seat(['reviewer', '--author-family', 'claude'], { models: { sol: { model: 'gpt-6.1-sol', family: 'gpt' } } })).seats[0],
+  assert.deepEqual((await seat(['reviewer', '--author-family', 'claude', '--available', 'codex=gpt-6.3-sol'], pin)).seats[0],
     { name: 'sol', provider: 'codex', model: 'gpt-6.1-sol', effort: 'high', source: 'model', family: 'gpt' });
-  assert.deepEqual((await seat(['council'], { models: { fable: { effort: 'medium' } } })).seats[0], { ...fable, effort: 'medium' });
-  const solo = await seat(['reviewer', '--author-family', 'claude'], oneFamily);
-  assert.deepEqual(solo.seats.map(s => [s.name, s.model, s.family]), [['fable', 'claude-fable-5-2', 'claude'], ['opus', 'claude-opus-5-5', 'claude']]);
-  assert.deepEqual(names(await seat(['council'], oneFamily)), ['fable', 'opus']);
+  assert.deepEqual((await seat(['council'], effort)).seats, [{ ...fable, effort: 'medium' }, sol, muse]);
+  const opus = { ...fable, name: 'opus', model: 'claude-opus-5-5', track: 'claude-opus-*' };
+  assert.deepEqual((await seat(['reviewer', '--author-family', 'claude'], oneFamily)).seats, [fable, opus]);
+  assert.deepEqual((await seat(['council', '--available', 'claude=claude-fable-5-3'], oneFamily)).seats,
+    [{ ...fable, model: 'claude-fable-5-3', source: 'track' }, opus]);
 });
 
 const faults = [
