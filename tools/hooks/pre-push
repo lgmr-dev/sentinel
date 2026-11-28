@@ -3,7 +3,6 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 export GIT_NO_REPLACE_OBJECTS=1 GIT_NO_LAZY_FETCH=1
 
-zero=0000000000000000000000000000000000000000
 fetch_objects() {
   local filter=()
   if git config --get-regexp '^remote\..*\.promisor$' 2>/dev/null | grep -q ' true$'; then
@@ -52,7 +51,7 @@ fi
 report="$(mktemp)"
 trap 'rm -f "$report"' EXIT
 while read -r _ local_sha remote_ref _; do
-  [[ "$local_sha" == "$zero" ]] && continue
+  [[ "$local_sha" =~ ^0+$ ]] && continue
   tools/privacy.sh ref "$remote_ref"
   if [[ "$(git cat-file -t "$local_sha^{}")" != commit ]]; then
     echo "pre-push: ${local_sha:0:12} is not a commit" >&2
