@@ -57,12 +57,13 @@ PR with a Codex agent.
    the user asks:
    1. Install the Sentinel skills of the `core` and `ops` profiles on the
       host. The playbook runs skills from both.
-   2. Write `~/.config/sentinel/seats.json`. It maps each seat name of
-      `patrol.json`, the lead and each council seat, to a model, as in the
-      example below. A seat name is only an alias. Each host maps it to a
-      model, so a host can map `opus` to another Opus version with no config
-      change. Write a `family` only for a model that you checked. Leave out
-      `track` to pin a seat.
+   2. Write `$XDG_CONFIG_HOME/sentinel/seats.json`, or
+      `~/.config/sentinel/seats.json` when `XDG_CONFIG_HOME` is not set. It
+      maps each seat name of `patrol.json`, the lead and each council seat, to
+      a model, as in the example below. A seat name is only an alias. Each
+      host maps it to a model, so a host can map `opus` to another Opus
+      version with no config change. Write a `family` only for a model that
+      you checked. Leave out `track` to pin a seat.
 
       The tester is the first seat with a family other than the lead. With
       `council.one_family`, the tester can have the family of the lead. Then

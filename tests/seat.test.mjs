@@ -64,6 +64,8 @@ test('--author-family puts the members of another family first', async () => {
   assert.deepEqual(names(await seat(['reviewer', '--author-family', 'gpt'])), ['opus', 'sol']);
   const user = { models: { spare: { provider: 'copilot', model: 'spare-1', effort: 'high' } }, roles: { reviewer: ['spare', 'opus', 'sol'] } };
   assert.deepEqual(names(await seat(['reviewer', '--author-family', 'claude'], user)), ['sol', 'spare', 'opus']);
+  const empty = { models: { spare: { provider: 'copilot', model: 'spare-1', effort: 'high', family: '' } }, roles: { reviewer: ['opus', 'spare'] } };
+  assert.deepEqual(names(await seat(['reviewer', '--author-family', 'claude'], empty)), ['opus', 'spare']);
 });
 
 test('the role validates only its own members', async () => {
@@ -85,6 +87,8 @@ test('--available gives a member with a track the newest listed ID of its provid
   assert.deepEqual(await solFrom('codex=gpt-6.1-sol'), { ...sol, model: 'gpt-6.1-sol', source: 'track' });
   assert.deepEqual(await solFrom('claude=gpt-6.10-sol'), sol);
   assert.deepEqual(await solFrom('codex=gpt-6.1-sol', 'codex=gpt-6.3-sol,gpt-6-sol'), { ...sol, model: 'gpt-6.3-sol', source: 'track' });
+  const opus = await seat(['reviewer', '--names', 'opus', '--available', 'claude=claude-opus-5-20260101,claude-opus-5-5']);
+  assert.deepEqual([opus.seats[0].model, opus.seats[0].source], ['claude-opus-5-5', 'track']);
   const pinned = await seat(['reviewer', '--available', 'codex=gpt-6.3-sol'], { models: { sol: { model: 'gpt-6.1-sol', family: 'gpt' } } });
   assert.deepEqual(pinned.seats[0], { name: 'sol', provider: 'codex', model: 'gpt-6.1-sol', effort: 'high', source: 'model', family: 'gpt' });
 });
@@ -102,6 +106,9 @@ test('the examples of the seat guide resolve', async () => {
 const faults = [
   ['a user file that is not valid JSON', ['council'], '{ "models": ', /is not valid JSON/],
   ['models that is not an object', ['council'], { models: [] }, /models in .* is not an object/],
+  ['a models entry that is a string', ['council'], { models: { sol: 'gpt-6.3-sol' } }, /the seat sol in .* is not an object/],
+  ['a models entry that is null', ['council'], { models: { sol: null } }, /the seat sol in .* is not an object/],
+  ['a track that is not a string', ['reviewer'], { models: { sol: { track: 6 } } }, /the track of the seat sol in .* is not a string/],
   ['roles that is not an object', ['council'], { roles: 'fable' }, /roles in .* is not an object/],
   ['a role with no members', ['council'], { roles: { council: [] } }, /the role council has no members/],
   ['a role that the file does not define', ['tester'], undefined, /the role tester has no members/],

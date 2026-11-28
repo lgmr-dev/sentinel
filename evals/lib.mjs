@@ -180,7 +180,8 @@ export function seatReplies(role, authorFamily) {
     return tracked.length === 1 ? tracked[0] : undefined;
   };
   const credit = (member, kind, id) => { if (member) { member[kind]++; member.replies++; member.ids.add(id); } };
-  const replied = run => run.code === 0 && run.bytes > 0 && !run.args.some(arg => ['--help', '-h', 'help', '--version', '-V', '-v'].includes(arg));
+  const help = run => run.args.some(arg => ['--help', '-h', 'help', '--version', '-V', '-v'].includes(arg));
+  const replied = run => run.code === 0 && run.bytes > 0 && !help(run);
   const trace = events();
   const chair = trace.find(e => e.type === 'thread.started')?.thread_id;
   const report = ({ content = [], harnessNoteCount = 0, harnessTailCount = 0 }) => content.slice(harnessNoteCount, content.length - harnessTailCount);
@@ -206,7 +207,7 @@ export function seatReplies(role, authorFamily) {
   if (role !== 'reviewer') for (const run of worked) credit(owner('codex', model(run.args)), 'launch', model(run.args));
   else if (!execs.length) for (const s of loose) credit(owner('codex', s.model), 'session', s.model);
   else {
-    const failed = new Set(execs.filter(run => !replied(run) && !run.args.includes('resume')).map(run => owner('codex', model(run.args))));
+    const failed = new Set(execs.filter(run => !replied(run) && !help(run) && !run.args.includes('resume')).map(run => owner('codex', model(run.args))));
     const used = new Set();
     for (const run of worked) {
       const member = owner('codex', model(run.args));

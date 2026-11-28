@@ -12,7 +12,7 @@ const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export function trackVersion(track, id) {
   const [head, tail] = track.split('*');
-  return id.match(new RegExp(`^${escape(head)}(\\d+(?:[.-]\\d+)*)${escape(tail)}$`))?.[1].split(/[.-]/).map(Number) ?? null;
+  return id.match(new RegExp(`^${escape(head)}(\\d{1,4}(?:[.-]\\d{1,4})*)${escape(tail)}$`))?.[1].split(/[.-]/).map(Number) ?? null;
 }
 
 function newer(a, b) {
@@ -53,21 +53,28 @@ export function resolve(seats, role, { authorFamily, available = {}, names } = {
     }
     if (seen.has(`${entry.provider} ${model}`)) fail(`two members of the role ${role} use ${entry.provider} ${model}`);
     seen.add(`${entry.provider} ${model}`);
-    return defined({ name, provider: entry.provider, model, effort: entry.effort, source, track: entry.track, family: entry.family });
+    return defined({ name, provider: entry.provider, model, effort: entry.effort, source, track: entry.track, family: entry.family || undefined });
   });
   const other = member => member.family !== undefined && member.family !== authorFamily;
   return authorFamily ? [...list.filter(other), ...list.filter(member => !other(member))] : list;
+}
+
+const isObject = value => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export function checkSeats(seats, file) {
+  for (const key of ['models', 'roles']) if (seats?.[key] !== undefined && !isObject(seats[key])) fail(`${key} in ${file} is not an object`);
+  for (const [name, entry] of Object.entries(seats?.models ?? {})) {
+    if (!isObject(entry)) fail(`the seat ${name} in ${file} is not an object`);
+    if (entry.track !== undefined && typeof entry.track !== 'string') fail(`the track of the seat ${name} in ${file} is not a string`);
+  }
+  return seats;
 }
 
 function userSeats(file) {
   let text, seats;
   try { text = fs.readFileSync(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return {}; throw error; }
   try { seats = JSON.parse(text); } catch (error) { fail(`${file} is not valid JSON: ${error.message}`); }
-  for (const key of ['models', 'roles']) {
-    const value = seats?.[key];
-    if (value !== undefined && (typeof value !== 'object' || value === null || Array.isArray(value))) fail(`${key} in ${file} is not an object`);
-  }
-  return seats;
+  return checkSeats(seats, file);
 }
 
 const isMain = import.meta.main ?? (() => {

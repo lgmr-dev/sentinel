@@ -50,6 +50,8 @@ missing or pre-failing checks in the brief.
 Pick the reviewer from the seats file. `seat.mjs` is in the `council` skill
 folder next to this skill folder. Run it as
 `node <council skill folder>/scripts/seat.mjs resolve reviewer ...`.
+The trigger "sol loop" names this skill, not the seat `sol`. The reviewer
+comes from the `reviewer` role. To get Sol, the user names Sol.
 
 - If the user names the reviewer by provider, model, and effort, use it. Do
   not run `seat.mjs`.
@@ -61,7 +63,7 @@ folder next to this skill folder. Run it as
   `seat.mjs resolve reviewer --names sol`. Put the version in place of `*` in
   its `track`, and start only that ID. For another one-run change, name the
   reviewer by provider, model, and effort.
-- If the user gives neither a seat name nor a model ID, report it and start no
+- If the user names a reviewer that is neither a seat name of the seats file nor a model ID, report it and start no
   model. Do not guess an ID. An ID that the model list of the route gives for
   that name is not a guess.
 - Else run `seat.mjs resolve reviewer --author-family <family>`. Your family is

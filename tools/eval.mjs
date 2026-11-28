@@ -8,7 +8,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { events, executions } from '../evals/lib.mjs';
 import { trustTable, failureList } from './trust.mjs';
-import { mergeSeats } from '../skills/council/scripts/seat.mjs';
+import { checkSeats, mergeSeats } from '../skills/council/scripts/seat.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const evalsDir = path.join(root, 'evals');
@@ -36,11 +36,12 @@ function options(argv) {
     else if (flag === '--arms') { opts.arms = value.split(','); i++; }
     else if (flag === '--rejudge') { opts.rejudge = value; i++; }
     else if (flag === '--resume') { opts.resume = value; i++; }
-    else if (flag === '--seats') { opts.seats = value; i++; }
+    else if (flag === '--seats') { if (value === undefined) throw new Error('--seats needs a file'); opts.seats = value; i++; }
     else throw new Error(`Unknown option: ${flag}`);
   }
   if (opts.arms && (!opts.ab || opts.arms.some(arm => arm !== 'with' && arm !== 'without'))) throw new Error('--arms needs --ab and takes with, without or both');
   if (opts.resume && opts.earlyStop) throw new Error('--resume needs --no-early-stop');
+  if (opts.seats && opts.rejudge) throw new Error('--seats has no effect with --rejudge');
   return opts;
 }
 
@@ -473,12 +474,14 @@ async function main() {
   }
   if (!cases.some(testCase => targetsFor(testCase).length)) throw new Error('No targets selected');
   const defaultSeats = JSON.parse(readFileSync(path.join(root, 'skills/council/seats.json'), 'utf8'));
-  const seatsFlag = opts.seats && JSON.parse(readFileSync(opts.seats, 'utf8'));
+  const seatsFlag = opts.seats && checkSeats(JSON.parse(readFileSync(opts.seats, 'utf8')), opts.seats);
   for (const testCase of cases) {
-    const given = seatsFlag ?? testCase.seats;
+    const given = seatsFlag ?? (testCase.seats && checkSeats(testCase.seats, `the seats of ${testCase.name}`));
     Object.assign(testCase, { runSeats: mergeSeats(defaultSeats, given), seatsWritten: !!given });
-    for (const name of testCase.runSeats.roles[seatRoles[testCase.skill]] ?? []) {
-      const provider = testCase.runSeats.models[name]?.provider;
+    const role = seatRoles[testCase.skill];
+    for (const name of testCase.runSeats.roles[role] ?? []) {
+      if (!testCase.runSeats.models[name]) throw new Error(`${testCase.name}: the seat ${name} of the role ${role} is not in the seats`);
+      const provider = testCase.runSeats.models[name].provider;
       if (!loggedClis.includes(provider)) throw new Error(`${testCase.name}: the seat ${name} has the provider ${provider}, but the runner logs only ${loggedClis.join(', ')}`);
     }
   }
