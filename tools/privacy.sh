@@ -12,6 +12,8 @@ system_homes='[/\\]users[/\\]+(shared|public|default)[.]*$'
 email='([[:alnum:]._%+-]|[^[:print:][:cntrl:][:space:]])+@([[:alnum:]-]|[^[:print:][:cntrl:][:space:]])+(\.([[:alnum:]-]|[^[:print:][:cntrl:][:space:]])+)*\.([[:alpha:]]|[^[:print:][:cntrl:][:space:]]){2,}'
 ssh_remote='(^|[^A-Za-z0-9._%+-])git@[A-Za-z0-9.-]+(:|/)[A-Za-z0-9._~/-]+'
 url_user='[Hh][Tt][Tt][Pp][Ss]?://[A-Za-z0-9._~%:+-]+@'
+separators="$(printf '\302[\240-\277]|\342\200[\200-\277]|\342\201[\200-\257]|\343\200[\200\201\203-\277]|\357\274[\200-\215\217\232-\240\273-\277]|\357\275[\200\233-\240\242-\245]')"
+dots="$(printf '\343\200\202|\357\274\216|\357\275\241')"
 personal_mail='([[:alnum:]._%+-]|[^[:print:][:cntrl:][:space:]])+@(gmail|googlemail|mail|hotmail|outlook|live|msn|passport|icloud|me|mac|yahoo|ymail|rocketmail|aol|aim|proton|protonmail|pm|tutanota|tuta|tutamail|keemail|fastmail|hey|posteo|mailbox|runbox|startmail|disroot|riseup|skiff|duck|zoho|att|sbcglobal|bellsouth|pacbell|prodigy|swbell|ameritech|flash|comcast|xfinity|verizon|cox|charter|spectrum|rr|twc|earthlink|juno|netzero|frontier|frontiernet|centurylink|windstream|optonline|optimum|suddenlink|mediacom|shaw|rogers|sympatico|bell|videotron|telus|cogeco|btinternet|btopenworld|sky|virginmedia|ntlworld|blueyonder|talktalk|tiscali|gmx|web|t-online|freenet|arcor|free|sfr|neuf|laposte|orange|wanadoo|libero|virgilio|alice|tin|tim|seznam|centrum|atlas|onet|wp|o2|interia|abv|yandex|ya|rambler|inbox|list|bk|naver|daum|hanmail|nate|163|126|yeah|qq|foxmail|sina|sohu|aliyun|rediffmail|uol|bol|terra|ig|bigpond|optusnet|iinet|tpg|xtra)(\.[A-Za-z]{2,3}){1,2}([^A-Za-z0-9-]|$)'
 public_address='^([^@[:space:]]+@users\.noreply\.(github|gitlab)\.com|(noreply|support|web-flow)@github\.com|noreply@(anthropic|openai)\.com|[^@[:space:]]+@([a-z0-9-]+\.)*example\.(com|net|org)|[^@[:space:]]+@([a-z0-9-]+\.)*(example|invalid|test|localhost))$'
 not_address='@(v?[0-9]+\.[0-9]|[0-9]+x\.|[A-Za-z0-9_.-]+\.(service|socket|timer|target|mount|path|slice|scope|device|swap|automount)$)'
@@ -113,26 +115,17 @@ check_links() {
 
 check_address() {
   local address
-  address="$(tr '[:upper:]' '[:lower:]' <<<"$2")"
+  address="$(LC_ALL=C sed -E 's/^[^ -~]+//; s/[^ -~]+$//' <<<"$2" | tr '[:upper:]' '[:lower:]')"
   [[ "$address" =~ $public_address ]] || fail "$1: use a GitHub noreply address"
-}
-
-check_text_address() {
-  local ascii
-  ascii="$(LC_ALL=C tr -c '@!-~' '\n' <<<"$2" | grep @ || true)"
-  if [[ "${2#*"$ascii"}" != *.* && "$(tr '[:upper:]' '[:lower:]' <<<"$ascii")" =~ $public_address ]]; then
-    return 0
-  fi
-  check_address "$1" "$2"
 }
 
 check_addresses() {
   local name="$1" text addresses found
-  text="$(sed -E -e "s#$ssh_remote##g" -e "s#$url_user##g" <<<"$2")"
-  addresses="$({ grep -oE "$email" <<<"$text"; LC_ALL=C tr -c '\n -~' ' ' <<<"$text" | grep -oE "$email"; } | grep -viE "$not_address" || true)"
+  text="$(sed -E -e "s#$ssh_remote##g" -e "s#$url_user##g" <<<"$2" | LC_ALL=C sed -E -e "s/$separators/ /g" -e "s/$dots/./g")"
+  addresses="$(grep -oE "$email" <<<"$text" | grep -viE "$not_address" || true)"
   addresses+=$'\n'"$(grep -E '^[A-Za-z-]*-[Bb][Yy]:' <<<"$text" | grep -oE '<[^<>]*@[^<>]*>' | tr -d '<>' || true)"
   while read -r found; do
-    [[ -z "$found" ]] || check_text_address "$name" "$found"
+    [[ -z "$found" ]] || check_address "$name" "$found"
   done < <(sort -u <<<"$addresses")
   return 0
 }

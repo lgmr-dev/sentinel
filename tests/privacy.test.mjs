@@ -181,6 +181,9 @@ const cLocale = [
   ['a personal address with an ideographic full stop in the domain', `Ask ${addressOf('alice', 'personal-isp\u3002co.uk')}`, false],
   ['a personal address after a bot address and an em dash', `by ${bot}—${addressOf('alice', 'personal-isp.de')}`, false],
   ['a personal domain that starts with a bot domain', `Ask ${bot}ü.personal-isp.de`, false],
+  ['a bot address in curly quotes before an em dash and a file name', `Use “${bot}”—README.md has details`, true],
+  ['example addresses with a non-ASCII last letter before non-ASCII text', `“${addressOf('josé', 'example.com')}” and ${addressOf('josé', 'example.com')}です`, true],
+  ['a personal address after a bot address and a non-ASCII letter', `${addressOf('noreply', 'github.com')}と${addressOf('josé', 'personal-isp.de')}`, false],
 ];
 for (const [name, message, passes] of cLocale) {
   test(`pre-push ${passes ? 'accepts' : 'stops'} ${name} in the C locale`, { skip }, (t) => {
