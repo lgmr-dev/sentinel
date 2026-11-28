@@ -1,5 +1,3 @@
-// Run each scenario against tools/install (bash) and tools/install.ps1 (pwsh),
-// on each platform where the shell exists. Both must give the same files.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -24,7 +22,6 @@ const impls = [
   process.platform === 'win32' && has('powershell', ['-NoProfile', '-Command', 'exit 0']) && 'powershell',
 ].filter(Boolean);
 
-// opts: { global, project, hosts, skills, noRules, check, remove, env }
 function install(impl, home, opts) {
   const skills = opts.skills ?? 'none';
   const args = impl === 'bash'
@@ -40,7 +37,6 @@ function install(impl, home, opts) {
   return spawnSync(impl, args, { env: { ...env, ...opts.env }, encoding: 'utf8' });
 }
 
-// Assert a zero exit, and show the installer output when it fails.
 function ok(result) {
   assert.equal(result.status, 0, `exit ${result.status}\n${result.stdout}${result.stderr}`);
   return result;
@@ -61,7 +57,6 @@ const profiles = (await fs.readFile(path.join(root, 'skills/profiles.txt'), 'utf
 const inProfiles = (...names) => [...new Set(profiles.filter(([p]) => names.includes(p)).map(([, s]) => s))];
 const skillRoots = home => ['.agents/skills', '.claude/skills', '.kiro/skills'].map(dir => path.join(home, dir));
 
-// Map each file in a folder to its bytes, without the ownership file.
 async function tree(dir) {
   const files = {};
   for (const entry of await fs.readdir(dir, { recursive: true, withFileTypes: true })) {
@@ -198,7 +193,6 @@ for (const impl of impls) {
     const legacy = path.join(skills, '.sentinel-skills.json');
     const v020 = { council: { 'SKILL.md': 'old council\n' }, 'sol-loop': { 'SKILL.md': 'old sol\n' },
       helix: { 'SKILL.md': 'retired\n', 'docs/a.md': 'a\n' } };
-    // v0.2.0 wrote JSON.stringify(registry, null, 2) with a SHA-256 for each file.
     const registry = { schema_version: 1, roots: Object.keys(v020), skills: {} };
     for (const [name, files] of Object.entries(v020)) {
       registry.skills[name] = {};
@@ -288,7 +282,6 @@ for (const impl of impls) {
     ok(install(impl, home, { global: true, hosts: 'claude' }));
     assert.equal(await read(style), source);
     assert.equal(await read(owner), await ownership(path.dirname(style)));
-    // An older release that the installer wrote is drift, and the next run updates it.
     await fs.writeFile(style, 'an older release\n');
     await fs.writeFile(owner, await ownership(path.dirname(style)));
     const drift = install(impl, home, { global: true, hosts: 'claude', check: true });
@@ -296,7 +289,6 @@ for (const impl of impls) {
     assert.match(drift.stdout, /DRIFT: +.*sentinel\.md/);
     ok(install(impl, home, { global: true, hosts: 'claude' }));
     assert.equal(await read(style), source);
-    // An update that stopped after the file and before the hash ends on the next run.
     await fs.writeFile(owner, `${'0'.repeat(64)}  sentinel.md\n`);
     ok(install(impl, home, { global: true, hosts: 'claude' }));
     assert.equal(await read(owner), await ownership(path.dirname(style)));

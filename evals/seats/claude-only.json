@@ -1,0 +1,10 @@
+{
+  "models": {
+    "fable": { "provider": "claude", "model": "claude-fable-5-2", "track": "claude-fable-*", "family": "claude", "effort": "high" },
+    "opus": { "provider": "claude", "model": "claude-opus-5-5", "track": "claude-opus-*", "family": "claude", "effort": "high" }
+  },
+  "roles": {
+    "reviewer": ["fable", "opus"],
+    "council": ["fable", "opus"]
+  }
+}
