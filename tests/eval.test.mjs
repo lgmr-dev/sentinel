@@ -36,12 +36,12 @@ test('a run checks the seats before any launch', { skip: process.platform === 'w
     await runWith({ roles: { reviewer: [] } }, 'review-loop-pagination'),
     await runWith({ models: { cx: { provider: 'codex' } }, roles: { reviewer: ['cx'] } }, 'review-loop-pagination'),
   ];
-  const caseDir = fileURLToPath(new URL('../evals/zz-seats-null/', import.meta.url));
-  await fs.mkdir(caseDir);
+  const caseDir = await fs.mkdtemp(fileURLToPath(new URL('../evals/zz-seats-null-', import.meta.url)));
+  const caseName = path.basename(caseDir);
   try {
     await fs.writeFile(path.join(caseDir, 'eval.json'), JSON.stringify({ skill: 'council', seats: null }));
     await fs.writeFile(path.join(caseDir, 'prompt.md'), 'Review PR #7.\n');
-    const r = spawnSync(process.execPath, [script, '--case', 'zz-seats-null', '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'codex'], { encoding: 'utf8', env });
+    const r = spawnSync(process.execPath, [script, '--case', caseName, '--targets', 'opus-5.5-xhigh', '--runs', '1', '--judges', 'codex'], { encoding: 'utf8', env });
     errors.push([r.status, r.stderr.trim()]);
   } finally {
     await fs.rm(caseDir, { recursive: true, force: true });
@@ -54,7 +54,7 @@ test('a run checks the seats before any launch', { skip: process.platform === 'w
     [1, 'eval: council-review-pr: the role council names ghost, which models does not define'],
     [1, 'eval: review-loop-pagination: the role reviewer has no members'],
     [1, 'eval: review-loop-pagination: the seat cx has no model'],
-    [1, 'eval: the seats of zz-seats-null is not an object'],
+    [1, `eval: the seats of ${caseName} is not an object`],
   ]);
   assert.deepEqual(launched, []);
 });

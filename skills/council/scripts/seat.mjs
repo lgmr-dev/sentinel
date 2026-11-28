@@ -67,7 +67,7 @@ export function checkSeats(seats, file) {
   for (const key of ['models', 'roles']) if (seats[key] !== undefined && !isObject(seats[key])) fail(`${key} in ${file} is not an object`);
   for (const [name, entry] of Object.entries(seats.models ?? {})) {
     if (!isObject(entry)) fail(`the seat ${name} in ${file} is not an object`);
-    for (const key of ['provider', 'model', 'effort', 'track']) if (entry[key] !== undefined && typeof entry[key] !== 'string') fail(`the ${key} of the seat ${name} in ${file} is not a string`);
+    for (const key of ['provider', 'model', 'effort', 'track', 'family']) if (entry[key] !== undefined && typeof entry[key] !== 'string') fail(`the ${key} of the seat ${name} in ${file} is not a string`);
   }
   return seats;
 }
