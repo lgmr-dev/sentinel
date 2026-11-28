@@ -472,12 +472,12 @@ async function main() {
     cases = cases.filter(c => changedCases.has(c.name) || skills.has(c.skill) || (c.without_skills ?? []).some(x => skills.has(x)) || (c.rule && files.has('rules/AGENTS.md')));
     if (!cases.length) { console.log(`No case covers the changes since ${opts.base}. Use --case or --ab.`); return; }
   }
-  if (!cases.some(testCase => targetsFor(testCase).length)) throw new Error('No targets selected');
   const defaultSeats = JSON.parse(readFileSync(path.join(root, 'skills/council/seats.json'), 'utf8'));
   const seatsFlag = opts.seats && checkSeats(JSON.parse(readFileSync(opts.seats, 'utf8')), opts.seats);
+  if (!cases.some(testCase => targetsFor(testCase).length)) throw new Error('No targets selected');
   for (const testCase of cases) {
-    const given = seatsFlag ?? (testCase.seats && checkSeats(testCase.seats, `the seats of ${testCase.name}`));
-    Object.assign(testCase, { runSeats: mergeSeats(defaultSeats, given), seatsWritten: !!given });
+    const given = opts.seats ? seatsFlag : 'seats' in testCase ? checkSeats(testCase.seats, `the seats of ${testCase.name}`) : undefined;
+    Object.assign(testCase, { runSeats: mergeSeats(defaultSeats, given), seatsWritten: given !== undefined });
     const role = seatRoles[testCase.skill];
     if (!role) continue;
     let members;

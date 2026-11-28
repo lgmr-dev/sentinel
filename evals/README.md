@@ -32,8 +32,9 @@ case or `--seats` gives seats. Other cases keep a clean host.
 Before the first launch, the runner resolves the role of each case with
 `skills/council/scripts/seat.mjs`. It stops with an error when the role does
 not resolve. The runner logs only the `claude`, `codex` and `muse` CLIs. So it
-also stops when a member of the role of the case has another `provider`. The role of a `council` case is `council`, and the role of
-a `review-loop` case is `reviewer`.
+also stops when a member of the role of the case has another `provider`.
+The role of a `council` case is `council`, and the role of a `review-loop`
+case is `reviewer`.
 
 The seat checks read the saved seats of the row, also in a rejudge. They do
 not read the host file of the sandbox, because the agent can change it. A row

@@ -40,6 +40,7 @@ export function resolve(seats, role, { authorFamily, available = {}, names } = {
   if (!Array.isArray(members) || !members.length) fail(`the role ${role} has no members`);
   const seen = new Set();
   const list = members.map(name => {
+    if (typeof name !== 'string') fail(`the role ${role} has a member that is not a name: ${JSON.stringify(name)}`);
     const entry = seats.models[name];
     if (!entry) fail(names ? `--names gives ${name}, which models does not define` : `the role ${role} names ${name}, which models does not define`);
     for (const key of ['provider', 'model', 'effort']) if (!entry[key]) fail(`the seat ${name} has no ${key}`);
@@ -66,7 +67,7 @@ export function checkSeats(seats, file) {
   for (const key of ['models', 'roles']) if (seats[key] !== undefined && !isObject(seats[key])) fail(`${key} in ${file} is not an object`);
   for (const [name, entry] of Object.entries(seats.models ?? {})) {
     if (!isObject(entry)) fail(`the seat ${name} in ${file} is not an object`);
-    for (const key of ['model', 'track']) if (entry[key] !== undefined && typeof entry[key] !== 'string') fail(`the ${key} of the seat ${name} in ${file} is not a string`);
+    for (const key of ['provider', 'model', 'effort', 'track']) if (entry[key] !== undefined && typeof entry[key] !== 'string') fail(`the ${key} of the seat ${name} in ${file} is not a string`);
   }
   return seats;
 }
